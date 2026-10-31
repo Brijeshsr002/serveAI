@@ -1,8 +1,11 @@
 import type { ServiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { MESSAGE_STEPS, type StepKey } from "@/lib/message-steps";
 
-export const SETTING_DEFAULTS = {
-  center_name: "ServAI Service Center",
+export { fill } from "@/lib/message-steps";
+
+const BASE_DEFAULTS = {
+  center_name: "My Car Garage",
   center_phone: "",
   center_address: "",
   whatsapp_commands_enabled: "true",
@@ -12,17 +15,26 @@ export const SETTING_DEFAULTS = {
   template_payment_confirmation: "serveai_payment_received",
   template_invoice: "serveai_invoice",
   template_language: "en",
-  msg_ASSIGNED: "Hi {{customer_name}}, your vehicle service request {{service_number}} has been assigned to our service team.",
-  msg_VEHICLE_RECEIVED: "Hi {{customer_name}}, your {{vehicle_model}} has been received at our service center.",
-  msg_INSPECTION: "Hi {{customer_name}}, your {{vehicle_model}} is currently under inspection.",
-  msg_SERVICE_IN_PROGRESS: "Good news! The service for your {{vehicle_model}} has started.",
-  msg_WAITING_FOR_PARTS: "Your vehicle service is currently waiting for required parts. We will update you once work resumes.",
-  msg_READY_FOR_DELIVERY: "Your vehicle is ready for delivery. Please use the link below to view the service details and payment information.\n{{tracking_link}}",
-  msg_COMPLETED: "Your vehicle service has been completed. Thank you for choosing us.",
-  msg_CANCELLED: "Your vehicle service request {{service_number}} has been cancelled. Please contact us if this is unexpected.",
+  booking_enabled: "true",
+  booking_slot_times: "10:00, 12:00, 15:00, 17:00",
+  booking_slot_capacity: "2",
+  booking_days_ahead: "3",
 };
 
-export type SettingKey = keyof typeof SETTING_DEFAULTS;
+/** Each message step has its text (msg_), an on/off switch (notify_), and an optional template of its own (tpl_). */
+export type SettingKey = keyof typeof BASE_DEFAULTS | `msg_${StepKey}` | `notify_${StepKey}` | `tpl_${StepKey}`;
+
+export const SETTING_DEFAULTS = {
+  ...BASE_DEFAULTS,
+  ...Object.fromEntries(
+    MESSAGE_STEPS.flatMap((s) => [
+      [`msg_${s.key}`, s.text],
+      [`notify_${s.key}`, "true"],
+      [`tpl_${s.key}`, ""],
+    ]),
+  ),
+} as Record<SettingKey, string>;
+
 export const SETTING_KEYS = Object.keys(SETTING_DEFAULTS) as SettingKey[];
 
 export async function getSettings(): Promise<Record<SettingKey, string>> {
@@ -33,10 +45,6 @@ export async function getSettings(): Promise<Record<SettingKey, string>> {
 }
 
 export const statusMessageKey = (s: ServiceStatus) => `msg_${s}` as SettingKey;
-
-export function fill(template: string, vars: Record<string, string>) {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
-}
 
 export const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 export const trackingUrl = (token: string) => `${appUrl()}/track/${token}`;

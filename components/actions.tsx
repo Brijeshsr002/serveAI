@@ -22,6 +22,8 @@ export type FormField = {
   placeholder?: string;
   /** Leave out of the request when blank, e.g. "new password" on an edit form. */
   omitEmpty?: boolean;
+  /** Offered while typing; other values are still allowed. */
+  suggestions?: string[];
 };
 
 type Variant = "default" | "outline" | "secondary" | "ghost" | "destructive";
@@ -124,8 +126,10 @@ function FieldInput({ field: f, value }: { field: FormField; value: unknown }) {
           defaultValue={f.type === "datetime-local" ? toLocalInput(value) : text}
           required={f.required}
           placeholder={f.placeholder}
+          list={f.suggestions ? `${id}-list` : undefined}
         />
       )}
+      {f.suggestions && <datalist id={`${id}-list`}>{f.suggestions.map((s) => <option key={s} value={s} />)}</datalist>}
     </div>
   );
 }

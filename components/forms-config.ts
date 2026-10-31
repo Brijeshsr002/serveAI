@@ -1,4 +1,5 @@
 import type { FormField } from "@/components/actions";
+import { PART_NAMES, WORK_NAMES } from "@/lib/work-catalog";
 
 export const customerFields: FormField[] = [
   { name: "name", label: "Name", required: true },
@@ -37,13 +38,17 @@ export const itemFields: FormField[] = [
       { value: "SERVICE", label: "Service" },
     ],
   },
-  { name: "name", label: "Name", required: true, placeholder: "Engine Oil" },
+  { name: "name", label: "Name (pick or type)", required: true, placeholder: "Engine Oil, Car Wash…", suggestions: [...PART_NAMES, ...WORK_NAMES] },
   { name: "description", label: "Description" },
   { name: "quantity", label: "Quantity", type: "number", required: true },
   { name: "unitPrice", label: "Unit price (₹)", type: "number", required: true },
   { name: "tax", label: "Tax amount (₹)", type: "number" },
   { name: "discount", label: "Discount amount (₹)", type: "number" },
+  { name: "notifyCustomer", label: "Tell the customer on WhatsApp", type: "checkbox" },
 ];
+
+/** Tax and discount stay with the office; the customer is always told. */
+export const workerItemFields: FormField[] = itemFields.filter((f) => !["description", "tax", "discount", "notifyCustomer"].includes(f.name));
 
 export const jobEditFields: FormField[] = [
   { name: "customerComplaint", label: "Customer complaint", type: "textarea" },

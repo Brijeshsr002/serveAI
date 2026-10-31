@@ -5,14 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/client";
+import { cn } from "@/lib/utils";
 
-const DEV_ACCOUNTS = [
+const ROLE_ACCOUNTS = [
   ["Admin", "admin@serveai.local"],
   ["Reception", "reception@serveai.local"],
   ["Worker", "worker1@serveai.local"],
 ];
 
-export function LoginForm({ showDevAccounts }: { showDevAccounts: boolean }) {
+export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,6 +35,17 @@ export function LoginForm({ showDevAccounts }: { showDevAccounts: boolean }) {
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="space-y-1.5">
+        <p className="text-sm font-medium">I am</p>
+        {/* Fills the email only: the password must still be typed. */}
+        <div className="grid grid-cols-3 gap-2">
+          {ROLE_ACCOUNTS.map(([label, value]) => (
+            <button key={value} type="button" aria-pressed={email === value} onClick={() => setEmail(value)} className={cn("rounded-lg border px-2 py-2 text-sm font-medium hover:bg-accent", email === value && "border-primary bg-accent text-accent-foreground")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
         <Input id="email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
       </div>
@@ -43,18 +55,6 @@ export function LoginForm({ showDevAccounts }: { showDevAccounts: boolean }) {
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <Button type="submit" className="w-full" disabled={busy}>{busy ? "Logging in…" : "Log in"}</Button>
-      {showDevAccounts && (
-        <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-          <p className="mb-2 font-medium">Development accounts (seeded; password in README)</p>
-          <div className="flex flex-wrap gap-1.5">
-            {DEV_ACCOUNTS.map(([label, value]) => (
-              <button key={value} type="button" onClick={() => setEmail(value)} className="rounded border bg-background px-2 py-1 hover:bg-accent">
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </form>
   );
 }

@@ -2,9 +2,12 @@ import { ItemType, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { logActivity } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
+import type { SessionUser } from "@/lib/auth/session";
 import { db, isUniqueViolation, nextInvoiceNumber } from "@/lib/db";
 import { conflict, notFound } from "@/lib/errors";
 import { toNumber } from "@/lib/format";
+import { loadJobContext, NotificationService } from "@/lib/notifications";
+import { isTerminal } from "@/lib/status";
 
 const amount = z.coerce.number().min(0).max(100_000_000);
 
@@ -16,7 +19,12 @@ export const itemSchema = z.object({
   unitPrice: amount,
   tax: amount.default(0),
   discount: amount.default(0),
+  /** Staff choose; a worker's change always tells the customer. */
+  notifyCustomer: z.boolean().optional(),
 });
+
+type ItemInput = z.output<typeof itemSchema>;
+type ItemUser = Pick<SessionUser, "id" | "role">;
 
 /** Arithmetic in paise, so 0.1 + 0.2 style float errors never reach an invoice. */
 const toPaise = (rupees: number) => Math.round(rupees * 100);
@@ -32,24 +40,75 @@ async function assertNotPaid(jobId: string) {
   if (paid) throw conflict("SERVICE_ALREADY_PAID", "This service is already paid and its bill can no longer change");
 }
 
-export async function addItem(actor: Actor, jobId: string, input: z.output<typeof itemSchema>) {
+/** Loads a job whose bill this user may change. Workers only reach their own open jobs with no payment link out. */
+async function editableJob(user: ItemUser, jobId: string) {
   const job = await db.serviceJob.findUnique({ where: { id: jobId } });
-  if (!job) throw notFound("SERVICE_NOT_FOUND", "Service job not found");
+  // 404, not 403: a worker should not learn that someone else's job exists.
+  if (!job || (user.role === "WORKER" && job.assignedWorkerId !== user.id)) throw notFound("SERVICE_NOT_FOUND", "Service job not found");
   await assertNotPaid(jobId);
-  const item = await db.serviceItem.create({ data: { ...input, serviceJobId: jobId, total: lineTotal(input) } });
+  if (user.role === "WORKER") {
+    if (isTerminal(job.status)) throw conflict("SERVICE_CLOSED", "This service job is already closed");
+    const open = await db.payment.findFirst({ where: { serviceJobId: jobId, status: { in: ["PENDING", "PROCESSING"] } } });
+    if (open) throw conflict("PAYMENT_PENDING", "A payment link is already with the customer. Ask reception to change the bill.");
+  }
+  return job;
+}
+
+/** Keeps a worker's change on the invoice, and tells the customer the new total. */
+async function afterBillChange(
+  user: ItemUser,
+  actor: Actor,
+  jobId: string,
+  step: "ITEM_ADDED" | "ITEM_UPDATED" | "ITEM_REMOVED",
+  item: { name: string; total: unknown },
+  notifyCustomer?: boolean,
+) {
+  const worker = user.role === "WORKER";
+  const items = await db.serviceItem.findMany({ where: { serviceJobId: jobId }, select: { total: true } });
+  if (worker && items.length > 0 && (await db.invoice.findUnique({ where: { serviceJobId: jobId } }))) await generateInvoice(actor, jobId);
+  if (!worker && !notifyCustomer) return;
+  const paise = items.reduce((sum, i) => sum + toPaise(toNumber(i.total)), 0);
+  await NotificationService.sendBillChange(await loadJobContext(jobId), step, { name: item.name, cost: item.total }, fromPaise(paise));
+}
+
+export async function addItem(user: ItemUser, actor: Actor, jobId: string, input: ItemInput) {
+  const job = await editableJob(user, jobId);
+  const { notifyCustomer, ...fields } = input;
+  const data = user.role === "WORKER" ? { ...fields, tax: 0, discount: 0 } : fields;
+  const item = await db.serviceItem.create({ data: { ...data, serviceJobId: jobId, total: lineTotal(data) } });
   await logActivity(actor, {
     action: "SERVICE_ITEM_ADDED",
     entityType: "ServiceJob",
     entityId: jobId,
     summary: `${actor.name} added ${item.name} to ${job.serviceNumber}`,
   });
+  await afterBillChange(user, actor, jobId, "ITEM_ADDED", item, notifyCustomer);
   return item;
 }
 
-export async function removeItem(actor: Actor, jobId: string, itemId: string) {
+export async function updateItem(user: ItemUser, actor: Actor, jobId: string, itemId: string, input: ItemInput) {
+  const job = await editableJob(user, jobId);
+  const existing = await db.serviceItem.findFirst({ where: { id: itemId, serviceJobId: jobId } });
+  if (!existing) throw notFound("ITEM_NOT_FOUND", "Item not found");
+  const { notifyCustomer, ...fields } = input;
+  // Tax and discount are staff decisions, so a worker's edit keeps what is already there.
+  const data = user.role === "WORKER" ? { ...fields, tax: toNumber(existing.tax), discount: toNumber(existing.discount) } : fields;
+  const item = await db.serviceItem.update({ where: { id: itemId }, data: { ...data, total: lineTotal(data) } });
+  await logActivity(actor, {
+    action: "SERVICE_ITEM_UPDATED",
+    entityType: "ServiceJob",
+    entityId: jobId,
+    summary: `${actor.name} updated ${item.name} on ${job.serviceNumber}`,
+    metadata: { name: existing.name, from: existing.total.toString(), to: item.total.toString() },
+  });
+  await afterBillChange(user, actor, jobId, "ITEM_UPDATED", item, notifyCustomer);
+  return item;
+}
+
+export async function removeItem(user: ItemUser, actor: Actor, jobId: string, itemId: string, notifyCustomer?: boolean) {
+  await editableJob(user, jobId);
   const item = await db.serviceItem.findFirst({ where: { id: itemId, serviceJobId: jobId } });
   if (!item) throw notFound("ITEM_NOT_FOUND", "Item not found");
-  await assertNotPaid(jobId);
   await db.serviceItem.delete({ where: { id: itemId } });
   await logActivity(actor, {
     action: "SERVICE_ITEM_REMOVED",
@@ -57,6 +116,7 @@ export async function removeItem(actor: Actor, jobId: string, itemId: string) {
     entityId: jobId,
     summary: `${actor.name} removed ${item.name}`,
   });
+  await afterBillChange(user, actor, jobId, "ITEM_REMOVED", item, notifyCustomer);
 }
 
 /** Creates the invoice from the job's items, or rebuilds it if the bill changed before payment. */

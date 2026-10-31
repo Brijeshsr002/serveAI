@@ -7,7 +7,8 @@ import { dateTime, money, time } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { getJobForUser, workersWithLoad } from "@/lib/services/jobs";
 import { trackingUrl } from "@/lib/settings";
-import { isTerminal, STATUS_LABEL, STATUSES } from "@/lib/status";
+import { boardTargets, isTerminal, STATUS_LABEL, STATUSES } from "@/lib/status";
+import { VoiceStatus } from "@/components/voice-status";
 
 export default async function JobPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireRole(STAFF);
@@ -53,6 +54,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          {user.role === "ADMIN" && <VoiceStatus jobId={job.id} options={boardTargets("ADMIN", job.status).filter((s) => s !== "CANCELLED")} />}
           <Section title="Details">
             <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
               <Field label="Customer"><TextLink href={`${base}/customers/${job.customer.id}`}>{job.customer.name}</TextLink></Field>
@@ -71,7 +73,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
           <Section
             title="Service items"
-            action={!paid && <FormDialog trigger="Add item" title="Add service item" variant="outline" endpoint={`/api/service-jobs/${job.id}/items`} fields={itemFields} initial={{ quantity: 1, tax: 0, discount: 0, itemType: "PART" }} success="Item added" />}
+            action={!paid && <FormDialog trigger="Add item" title="Add service item" variant="outline" endpoint={`/api/service-jobs/${job.id}/items`} fields={itemFields} initial={{ quantity: 1, tax: 0, discount: 0, itemType: "PART", notifyCustomer: true }} success="Item added" />}
           >
             <SimpleTable
               headers={["Item", "Type", "Qty", "Price", "Tax", "Discount", "Total", ""]}
@@ -84,7 +86,12 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                 money(i.tax),
                 money(i.discount),
                 money(i.total),
-                !paid && <ActionButton key="x" label="Remove" variant="ghost" method="DELETE" endpoint={`/api/service-jobs/${job.id}/items/${i.id}`} />,
+                !paid && (
+                  <div key="x" className="flex gap-1">
+                    <FormDialog trigger="Edit" title={`Edit ${i.name}`} variant="ghost" method="PATCH" endpoint={`/api/service-jobs/${job.id}/items/${i.id}`} fields={itemFields} initial={{ itemType: i.itemType, name: i.name, description: i.description, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), tax: Number(i.tax), discount: Number(i.discount), notifyCustomer: true }} success="Item updated" />
+                    <ActionButton label="Remove" variant="ghost" method="DELETE" endpoint={`/api/service-jobs/${job.id}/items/${i.id}?notify=1`} confirm={`Remove ${i.name}? The customer will be told on WhatsApp.`} />
+                  </div>
+                ),
               ])}
             />
             {job.items.length > 0 && <p className="mt-3 text-right text-sm font-semibold">Total: {money(itemsTotal)}</p>}

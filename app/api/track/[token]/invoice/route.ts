@@ -12,8 +12,8 @@ export const GET = open(
     const job = await jobByToken(params.token);
     const invoice = await db.invoice.findUnique({ where: { serviceJobId: job.id }, include: invoiceInclude });
     if (!invoice) throw notFound("INVOICE_NOT_FOUND", "The invoice isn't ready yet");
-    const { center_name } = await getSettings();
-    const pdf = await renderInvoicePdf(invoice, invoicePaymentStatus(invoice), center_name);
+    const { center_name, center_phone, center_address } = await getSettings();
+    const pdf = await renderInvoicePdf(invoice, invoicePaymentStatus(invoice), { name: center_name, phone: center_phone, address: center_address });
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",

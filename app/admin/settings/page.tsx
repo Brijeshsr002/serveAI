@@ -1,31 +1,39 @@
 import { SettingsForm } from "@/components/settings-form";
-import { PageHeader } from "@/components/ui-kit";
+import { PageHeader, TextLink } from "@/components/ui-kit";
 import { getSettings } from "@/lib/settings";
-import { STATUS_LABEL } from "@/lib/status";
-import type { ServiceStatus } from "@prisma/client";
-
-const STATUS_MESSAGES: ServiceStatus[] = ["ASSIGNED", "VEHICLE_RECEIVED", "INSPECTION", "SERVICE_IN_PROGRESS", "WAITING_FOR_PARTS", "READY_FOR_DELIVERY", "COMPLETED", "CANCELLED"];
 
 export default async function SettingsPage() {
   const values = await getSettings();
   return (
     <>
       <PageHeader title="Settings" subtitle="API keys and secrets are environment variables and never appear here" />
+      <p className="mb-4 text-sm">Change what customers are told at each step in <TextLink href="/admin/messages">Customer Messages</TextLink>.</p>
       <SettingsForm
         values={values}
         groups={[
           {
-            title: "Service center",
+            title: "Your garage",
+            hint: "Shown on invoices, the login page, the customer tracking page and WhatsApp messages.",
             fields: [
-              { key: "center_name", label: "Name" },
+              { key: "center_name", label: "Garage name" },
               { key: "center_phone", label: "Contact phone" },
               { key: "center_address", label: "Address" },
             ],
           },
           {
             title: "WhatsApp automation",
-            hint: "Turn commands off if your Sendiee AI assistant already answers status questions, so customers don't get two replies.",
+            hint: "Turn commands off if your Sendiee AI assistant already answers status questions, so customers don't get two replies. Slot booking also stops when commands are off.",
             fields: [{ key: "whatsapp_commands_enabled", label: "Auto-answer status, amount, payment and invoice questions", toggle: true }],
+          },
+          {
+            title: "WhatsApp slot booking",
+            hint: "A customer sends BOOK, picks a vehicle, a service and a time, and a job is created. Service choices come from Service Types.",
+            fields: [
+              { key: "booking_enabled", label: "Let customers book slots on WhatsApp", toggle: true },
+              { key: "booking_slot_times", label: "Slot times, 24-hour, separated by commas" },
+              { key: "booking_slot_capacity", label: "Cars per slot" },
+              { key: "booking_days_ahead", label: "Days ahead customers can book" },
+            ],
           },
           {
             title: "Approved WhatsApp templates",
@@ -37,11 +45,6 @@ export default async function SettingsPage() {
               { key: "template_invoice", label: "Invoice" },
               { key: "template_language", label: "Template language" },
             ],
-          },
-          {
-            title: "Status messages",
-            hint: "Sent inside the 24-hour window. Placeholders: {{customer_name}}, {{service_number}}, {{vehicle_model}}, {{registration}}, {{tracking_link}}",
-            fields: STATUS_MESSAGES.map((s) => ({ key: `msg_${s}`, label: STATUS_LABEL[s], long: true })),
           },
         ]}
       />

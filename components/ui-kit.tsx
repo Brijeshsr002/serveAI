@@ -27,9 +27,9 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   );
 }
 
-export function StatCard({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
+export function StatCard({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: string; tone?: string }) {
   return (
-    <Card size="sm">
+    <Card size="sm" className={cn(tone && "border-t-4", tone)}>
       <CardContent>
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
@@ -72,9 +72,10 @@ export function TextLink({ href, children }: { href: string; children: React.Rea
 }
 
 /** A plain GET form, so list search needs no client code. */
-export function SearchForm({ q, placeholder }: { q?: string; placeholder: string }) {
+export function SearchForm({ q, placeholder, view }: { q?: string; placeholder: string; view?: string }) {
   return (
     <form method="get" className="mb-4 max-w-sm">
+      {view && <input type="hidden" name="view" value={view} />}
       <Input name="q" defaultValue={q} placeholder={placeholder} aria-label={placeholder} />
     </form>
   );

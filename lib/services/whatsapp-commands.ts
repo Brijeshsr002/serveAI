@@ -6,6 +6,7 @@ import { rupees } from "@/lib/format";
 import { sendFreeformText } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
 import { normalizeRegistration } from "@/lib/phone";
+import { type BookingPending, continueBooking, isBookingRequest, startBooking } from "@/lib/services/whatsapp-booking";
 import { getSettings, trackingUrl, appUrl } from "@/lib/settings";
 import { ACTIVE_STATUSES, STATUS_LABEL } from "@/lib/status";
 
@@ -67,10 +68,11 @@ async function answer(intent: Intent, job: Job): Promise<string> {
   }
 }
 
-type Pending = { intent: Intent; jobIds: string[] };
+type JobPending = { intent: Intent; jobIds: string[] };
+type Pending = JobPending | BookingPending;
 
 /** Resolves "1" or a registration number against the list we last offered. */
-async function matchPendingChoice(pending: Pending, text: string) {
+async function matchPendingChoice(pending: JobPending, text: string) {
   const trimmed = text.trim();
   const index = /^\d{1,2}$/.test(trimmed) ? Number(trimmed) - 1 : -1;
   const jobs = await db.serviceJob.findMany({ where: { id: { in: pending.jobIds } }, include: jobInclude });
@@ -85,7 +87,15 @@ export async function replyForMessage(customer: Customer, text: string): Promise
   const conversation = await db.whatsappConversation.findUnique({ where: { customerId: customer.id } });
   const pending = conversation?.pendingChoice as Pending | null | undefined;
 
-  if (pending) {
+  const settings = await getSettings();
+  const bookingOn = settings.booking_enabled === "true";
+
+  if (pending?.intent === "BOOK") {
+    if (bookingOn) {
+      const next = await continueBooking(customer, pending, text, settings);
+      if (next) return next;
+    }
+  } else if (pending) {
     const job = await matchPendingChoice(pending, text);
     if (job) {
       await db.whatsappConversation.update({ where: { customerId: customer.id }, data: { pendingChoice: PrismaNamespace.DbNull } });
@@ -94,7 +104,14 @@ export async function replyForMessage(customer: Customer, text: string): Promise
   }
 
   const intent = detectIntent(text);
-  if (!intent) return null;
+  if (!intent) {
+    if (bookingOn && isBookingRequest(text)) {
+      // A conversation row exists for every inbound message, but a direct call may come first.
+      await db.whatsappConversation.upsert({ where: { customerId: customer.id }, create: { customerId: customer.id }, update: {} });
+      return { reply: await startBooking(customer, settings) };
+    }
+    return null;
+  }
 
   const jobs = await relevantJobs(customer.id, intent);
   if (jobs.length === 0) return { reply: "You don't have an active service with us right now. Reply here to book one." };

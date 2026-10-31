@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Prisma, ServiceStatus } from "@prisma/client";
+import { JobBoard } from "@/components/job-board";
 import { NewJobDialog } from "@/components/job-form";
 import { PageHeader, SearchForm, Section, SimpleTable, StatusBadge, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
@@ -8,17 +9,30 @@ import { dateTime, money } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { normalizeRegistration } from "@/lib/phone";
 import { workersWithLoad } from "@/lib/services/jobs";
-import { STATUS_LABEL, STATUSES } from "@/lib/status";
+import { ACTIVE_STATUSES, STATUS_LABEL, STATUSES, TERMINAL } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
-export default async function JobsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
+const jobInclude = {
+  customer: { select: { name: true } },
+  vehicle: { select: { brand: true, model: true, registrationNumber: true } },
+  assignedWorker: { select: { name: true } },
+} satisfies Prisma.ServiceJobInclude;
+
+/** Open jobs oldest first, as they are the next to deal with; closed columns only need recent history. */
+const loadBoardJobs = (where: Prisma.ServiceJobWhereInput) =>
+  Promise.all([
+    db.serviceJob.findMany({ where: { ...where, status: { in: ACTIVE_STATUSES } }, orderBy: { createdAt: "asc" }, take: 300, include: jobInclude }),
+    ...TERMINAL.map((s) => db.serviceJob.findMany({ where: { ...where, status: s }, orderBy: { updatedAt: "desc" }, take: 25, include: jobInclude })),
+  ]).then((groups) => groups.flat());
+
+export default async function JobsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; view?: string }> }) {
   const user = await requireRole(STAFF);
   const base = roleBase[user.role];
-  const { q, status } = await searchParams;
+  const { q, status, view } = await searchParams;
+  const board = view === "board";
   const term = q?.trim();
   const reg = term ? normalizeRegistration(term) : "";
   const where: Prisma.ServiceJobWhereInput = {
-    ...(status && STATUSES.includes(status as ServiceStatus) ? { status: status as ServiceStatus } : {}),
     ...(term
       ? {
           OR: [
@@ -29,24 +43,33 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         }
       : {}),
   };
-  const [jobs, customers, types, workers] = await Promise.all([
-    db.serviceJob.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      include: {
-        customer: { select: { name: true } },
-        vehicle: { select: { brand: true, model: true, registrationNumber: true } },
-        assignedWorker: { select: { name: true } },
-      },
-    }),
+  const listWhere: Prisma.ServiceJobWhereInput = {
+    ...where,
+    ...(status && STATUSES.includes(status as ServiceStatus) ? { status: status as ServiceStatus } : {}),
+  };
+  const [jobs, statusCounts, customers, types, workers] = await Promise.all([
+    board
+      ? loadBoardJobs(where)
+      : db.serviceJob.findMany({ where: listWhere, orderBy: { createdAt: "desc" }, take: 100, include: jobInclude }),
+    board ? db.serviceJob.groupBy({ by: ["status"], where, _count: true }) : [],
     db.customer.findMany({ orderBy: { name: "asc" }, take: 500, include: { vehicles: true } }),
     db.serviceType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     workersWithLoad(),
   ]);
+  const counts = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]));
+  const viewLink = (next?: string) => {
+    const params = new URLSearchParams();
+    if (next) params.set("view", next);
+    if (q) params.set("q", q);
+    return `?${params}`;
+  };
   return (
     <>
-      <PageHeader title="Service Jobs" subtitle={`${jobs.length} shown`}>
+      <PageHeader title="Service Jobs" subtitle={board ? `${statusCounts.reduce((sum, c) => sum + c._count, 0)} total` : `${jobs.length} shown`}>
+        <nav aria-label="Job view" className="flex rounded-lg border p-0.5 text-sm">
+          <Link href={viewLink()} aria-current={board ? undefined : "page"} className={cn("rounded-md px-2.5 py-0.5 hover:bg-accent", !board && "bg-accent font-medium")}>List</Link>
+          <Link href={viewLink("board")} aria-current={board ? "page" : undefined} className={cn("rounded-md px-2.5 py-0.5 hover:bg-accent", board && "bg-accent font-medium")}>Board</Link>
+        </nav>
         <NewJobDialog
           base={base}
           workers={workers}
@@ -59,7 +82,27 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           }))}
         />
       </PageHeader>
-      <SearchForm q={q} placeholder="Search service number, customer, registration" />
+      <SearchForm q={q} view={board ? "board" : undefined} placeholder="Search service number, customer, registration" />
+      {board ? (
+        <JobBoard
+          base={base}
+          role={user.role === "ADMIN" ? "ADMIN" : "RECEPTIONIST"}
+          counts={counts}
+          jobs={jobs.map((j) => ({
+            id: j.id,
+            serviceNumber: j.serviceNumber,
+            serviceType: j.serviceType,
+            status: j.status,
+            priority: j.priority,
+            customerName: j.customer.name,
+            registrationNumber: j.vehicle.registrationNumber,
+            vehicleName: `${j.vehicle.brand} ${j.vehicle.model}`,
+            workerName: j.assignedWorker?.name ?? null,
+            estimate: money(j.estimatedAmount),
+          }))}
+        />
+      ) : (
+        <>
       <div className="mb-4 flex flex-wrap gap-1.5 text-xs">
         {[undefined, ...STATUSES].map((s) => (
           <Link key={s ?? "all"} href={s ? `?status=${s}` : "?"} className={cn("rounded-full border px-2.5 py-1 hover:bg-accent", status === s && "border-primary text-primary")}>
@@ -83,6 +126,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           ])}
         />
       </Section>
+        </>
+      )}
     </>
   );
 }

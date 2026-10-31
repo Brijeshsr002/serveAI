@@ -72,5 +72,33 @@ export const WORKER_ACTION: Partial<Record<ServiceStatus, string>> = {
   COMPLETED: "Complete Job",
 };
 
+/**
+ * Columns a staff member may move a card to. Mirrors assertStatusChangeAllowed, which still decides on the server.
+ * ASSIGNED is left out because it needs a worker, so it happens through the assign action.
+ */
+export const boardTargets = (role: "ADMIN" | "RECEPTIONIST", s: ServiceStatus): ServiceStatus[] => {
+  if (isTerminal(s)) return [];
+  return role === "ADMIN" ? [...TRANSITIONS[s].filter((n) => n !== "ASSIGNED"), "CANCELLED"] : ["CANCELLED"];
+};
+
+/** Spoken words for each step. Longer phrases are tried first, so "start inspection" isn't read as "start service". */
+const VOICE_WORDS: [ServiceStatus, string[]][] = [
+  ["WAITING_FOR_PARTS", ["waiting for parts", "waiting for part", "waiting", "need parts", "spare parts", "parts"]],
+  ["READY_FOR_DELIVERY", ["ready for delivery", "ready to deliver", "delivery", "ready"]],
+  ["VEHICLE_RECEIVED", ["vehicle received", "car received", "bike received", "received", "arrived"]],
+  ["INSPECTION", ["start inspection", "inspection", "inspect", "checking"]],
+  ["SERVICE_IN_PROGRESS", ["start service", "service started", "service in progress", "in progress", "resume", "start work", "started work"]],
+  ["COMPLETED", ["complete job", "job complete", "completed", "complete", "finished", "finish", "done"]],
+];
+
+/** Only ever returns one of the steps on offer. */
+export function matchVoiceStatus(spoken: string, options: ServiceStatus[]): ServiceStatus | null {
+  const said = ` ${spoken.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim()} `;
+  for (const [status, words] of VOICE_WORDS) {
+    if (options.includes(status) && words.some((w) => said.includes(` ${w} `))) return status;
+  }
+  return null;
+}
+
 /** Next statuses a worker may choose. ASSIGNED only happens through the assign action. */
 export const workerNextStatuses = (s: ServiceStatus) => TRANSITIONS[s].filter((n) => n !== "ASSIGNED");

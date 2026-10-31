@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { ADMIN_ONLY } from "@/lib/permissions";
 import { getSettings, SETTING_KEYS } from "@/lib/settings";
 
-const schema = z.record(z.enum(SETTING_KEYS), z.string().max(2000));
+const schema = z.partialRecord(z.enum(SETTING_KEYS), z.string().max(2000));
 
 export const GET = authed(ADMIN_ONLY, async () => getSettings());
 

@@ -5,10 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Role } from "@prisma/client";
 import {
-  Activity, BarChart3, Car, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle,
+  Activity, BarChart3, Car, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
   Search, Settings, ShieldCheck, Tags, User, Users, Wrench, X, type LucideIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["WhatsApp", "/admin/whatsapp", MessageCircle],
     ["Reports", "/admin/reports", BarChart3],
     ["Service Types", "/admin/service-types", Tags],
+    ["Customer Messages", "/admin/messages", MessageSquareText],
     ["Settings", "/admin/settings", Settings],
     ["Activity Logs", "/admin/activity", Activity],
   ],
@@ -102,7 +104,7 @@ function GlobalSearch({ base, canSeeInvoices }: { base: string; canSeeInvoices: 
   );
 }
 
-export function Shell({ role, name, children }: { role: Role; name: string; children: React.ReactNode }) {
+export function Shell({ role, name, garage, children }: { role: Role; name: string; garage: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -117,7 +119,7 @@ export function Shell({ role, name, children }: { role: Role; name: string; chil
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 p-3" aria-label="Main">
-      <Logo className="mb-4 ml-1 h-9 self-start" />
+      <Logo name={garage} className="mb-4 ml-1 text-sidebar-foreground" />
       {items.map(([label, href, Icon]) => {
         const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`));
         return (
@@ -135,9 +137,9 @@ export function Shell({ role, name, children }: { role: Role; name: string; chil
           </Link>
         );
       })}
-      <div className="mt-auto border-t pt-3">
+      <div className="mt-auto border-t border-sidebar-border pt-3 text-sidebar-foreground">
         <p className="truncate px-2.5 text-sm font-medium">{name}</p>
-        <p className="mb-2 px-2.5 text-xs text-muted-foreground capitalize">{role.toLowerCase()}</p>
+        <p className="mb-2 px-2.5 text-xs text-sidebar-foreground/70 capitalize">{role.toLowerCase()}</p>
         <button onClick={logout} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-sidebar-accent">
           <LogOut className="size-4" /> Log out
         </button>
@@ -160,7 +162,8 @@ export function Shell({ role, name, children }: { role: Role; name: string; chil
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2.5">
           <button aria-label="Open menu" className="p-1 lg:hidden" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
-          {role === "WORKER" ? <Logo className="h-7 lg:hidden" /> : <GlobalSearch base={base} canSeeInvoices={role === "ADMIN"} />}
+          {role === "WORKER" ? <Logo name={garage} className="lg:hidden" /> : <GlobalSearch base={base} canSeeInvoices={role === "ADMIN"} />}
+          <LiveRefresh className="ml-auto" />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
       </div>

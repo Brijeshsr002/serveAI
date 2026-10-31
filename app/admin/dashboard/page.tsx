@@ -1,5 +1,6 @@
+import { RoadScene } from "@/components/car-art";
 import { SingleBarChart, WorkerChart } from "@/components/charts";
-import { PageHeader, Section, SimpleTable, StatCard, StatusBadge, TextLink } from "@/components/ui-kit";
+import { Section,SimpleTable, StatCard, StatusBadge, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { dateTime, money } from "@/lib/format";
@@ -20,15 +21,18 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Dashboard" subtitle={`Welcome back, ${user.name}`} />
+      <RoadScene className="mb-5 rounded-xl px-5 pt-4 pb-14">
+        <h1 className="text-xl font-semibold">Dashboard</h1>
+        <p className="text-sm text-slate-300">Welcome back, {user.name}. {stats.vehiclesInService} vehicle{stats.vehiclesInService === 1 ? "" : "s"} in the garage right now.</p>
+      </RoadScene>
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Customers" value={stats.customers} />
-        <StatCard label="Today's Services" value={stats.todayServices} />
-        <StatCard label="Active Services" value={stats.activeServices} />
-        <StatCard label="Completed Today" value={stats.completedToday} />
-        <StatCard label="Vehicles in Service" value={stats.vehiclesInService} />
-        <StatCard label="Pending Payments" value={stats.pendingPayments} hint={money(stats.pendingAmount)} />
-        {isAdmin && <StatCard label="Revenue" value={money(stats.revenue)} />}
+        <StatCard tone="border-t-sky-500" label="Total Customers" value={stats.customers} />
+        <StatCard tone="border-t-orange-500" label="Today's Services" value={stats.todayServices} />
+        <StatCard tone="border-t-blue-600" label="Active Services" value={stats.activeServices} />
+        <StatCard tone="border-t-green-600" label="Completed Today" value={stats.completedToday} />
+        <StatCard tone="border-t-violet-500" label="Vehicles in Service" value={stats.vehiclesInService} />
+        <StatCard tone="border-t-amber-500" label="Pending Payments" value={stats.pendingPayments} hint={money(stats.pendingAmount)} />
+        {isAdmin && <StatCard tone="border-t-teal-600" label="Revenue" value={money(stats.revenue)} />}
       </div>
       <div className="mb-6">
         <Section title="New requests awaiting assignment">

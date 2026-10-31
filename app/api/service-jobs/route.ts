@@ -31,4 +31,4 @@ export const GET = authed(ALL_ROLES, async ({ req, user }) => {
   });
 });
 
-export const POST = authed(STAFF, async ({ actor, body }) => ok(await createJob(actor, await body(jobSchema)), 201));
+export const POST = authed(STAFF, async ({ actor, body }) => ok(await createJob(actor, await body(jobSchema), undefined, true), 201));

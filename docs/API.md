@@ -89,8 +89,9 @@ Workers only see and change jobs assigned to them. Anything else returns 404.
 | PATCH | `/api/service-jobs/:id` | Staff | Any of `serviceType`, `customerComplaint`, `internalNotes`, `estimatedAmount`, `priority`, `appointmentDate`, `expectedCompletion` | 404 |
 | POST | `/api/service-jobs/:id/assign` | Staff | `workerId`* | 400 `INVALID_WORKER`, 409 `SERVICE_CLOSED`, 409 `ALREADY_ASSIGNED` |
 | POST | `/api/service-jobs/:id/status` | All, by rule | `status`*, `notes`, `override` | see below |
-| POST | `/api/service-jobs/:id/items` | Staff | `itemType`* (`PART`, `LABOUR`, `SERVICE`), `name`*, `unitPrice`*, `quantity`, `description`, `tax`, `discount` | 409 `SERVICE_ALREADY_PAID` |
-| DELETE | `/api/service-jobs/:id/items/:itemId` | Staff | | 404 `ITEM_NOT_FOUND`, 409 `SERVICE_ALREADY_PAID` |
+| POST | `/api/service-jobs/:id/items` | Staff, assigned worker | `itemType`* (`PART`, `LABOUR`, `SERVICE`), `name`*, `unitPrice`*, `quantity`, `description`, `tax`, `discount`, `notifyCustomer`. Workers can't set tax or discount, and the customer is always told | 409 `SERVICE_ALREADY_PAID`, 409 `SERVICE_CLOSED`, 409 `PAYMENT_PENDING` |
+| PATCH | `/api/service-jobs/:id/items/:itemId` | Staff, assigned worker | Same as POST | 404 `ITEM_NOT_FOUND`, same 409s as POST |
+| DELETE | `/api/service-jobs/:id/items/:itemId` | Staff, assigned worker | `?notify=1` tells the customer when staff remove a line | 404 `ITEM_NOT_FOUND`, same 409s as POST |
 | GET | `/api/workers` | Staff | Workers with `activeJobs` | |
 
 `tax` and `discount` on items are rupee amounts, not percentages.

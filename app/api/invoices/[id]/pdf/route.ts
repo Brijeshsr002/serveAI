@@ -10,8 +10,8 @@ import { getSettings } from "@/lib/settings";
 export const GET = authed(STAFF, async ({ params }) => {
   const invoice = await db.invoice.findUnique({ where: { id: params.id }, include: invoiceInclude });
   if (!invoice) throw notFound("INVOICE_NOT_FOUND", "Invoice not found");
-  const { center_name } = await getSettings();
-  const pdf = await renderInvoicePdf(invoice, invoicePaymentStatus(invoice), center_name);
+  const { center_name, center_phone, center_address } = await getSettings();
+  const pdf = await renderInvoicePdf(invoice, invoicePaymentStatus(invoice), { name: center_name, phone: center_phone, address: center_address });
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

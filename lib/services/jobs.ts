@@ -52,7 +52,7 @@ export const statusSchema = z.object({
 
 type JobCreate = z.output<typeof jobSchema>;
 
-export async function createJob(actor: Actor, input: JobCreate, externalRef?: string) {
+export async function createJob(actor: Actor, input: JobCreate, externalRef?: string, notifyCustomer = false) {
   const vehicle = await db.vehicle.findUnique({ where: { id: input.vehicleId } });
   if (!vehicle || vehicle.customerId !== input.customerId) {
     throw badRequest("VEHICLE_CUSTOMER_MISMATCH", "This vehicle does not belong to the selected customer");
@@ -93,6 +93,7 @@ export async function createJob(actor: Actor, input: JobCreate, externalRef?: st
     return created;
   });
 
+  if (notifyCustomer) await NotificationService.sendServiceRequestReceived(await loadJobContext(job.id));
   if (assignedWorkerId) return assignWorker(actor, job.id, assignedWorkerId);
   return job;
 }

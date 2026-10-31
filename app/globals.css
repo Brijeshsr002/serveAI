@@ -48,36 +48,36 @@
 
 :root {
     --background: oklch(1 0 0);
-    --foreground: #0B1033;
+    --foreground: #0F172A;
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: #0F172A;
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: #4A2BE8;
+    --popover-foreground: #0F172A;
+    --primary: #C2410C;
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --secondary: #F1F5F9;
+    --secondary-foreground: #0F172A;
+    --muted: #F1F5F9;
+    --muted-foreground: #526077;
+    --accent: #FFEDD5;
+    --accent-foreground: #7C2D12;
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: #4A2BE8;
+    --ring: #C2410C;
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: #4A2BE8;
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: #EEEBFD;
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
+    --sidebar: #0F172A;
+    --sidebar-foreground: #F1F5F9;
+    --sidebar-primary: #FDBA74;
+    --sidebar-primary-foreground: #0F172A;
+    --sidebar-accent: #1E293B;
+    --sidebar-accent-foreground: #F1F5F9;
+    --sidebar-border: #334155;
     --sidebar-ring: oklch(0.708 0 0);
 }
 
@@ -113,6 +113,26 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+}
+
+.road-dashes {
+    background-image: repeating-linear-gradient(90deg, #E2E8F0 0 14px, transparent 14px 28px);
+}
+
+.car-drive {
+    animation: car-drive 14s linear infinite;
+}
+
+@keyframes car-drive {
+    from { left: -6rem; }
+    to { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .car-drive {
+        animation: none;
+        left: 1.5rem;
+    }
 }
 
 @layer base {

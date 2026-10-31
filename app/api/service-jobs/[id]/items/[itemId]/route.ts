@@ -1,8 +1,10 @@
 import { authed } from "@/lib/api/route";
-import { STAFF } from "@/lib/permissions";
-import { removeItem } from "@/lib/services/invoices";
+import { ALL_ROLES } from "@/lib/permissions";
+import { itemSchema, removeItem, updateItem } from "@/lib/services/invoices";
 
-export const DELETE = authed(STAFF, async ({ actor, params }) => {
-  await removeItem(actor, params.id, params.itemId);
+export const PATCH = authed(ALL_ROLES, async ({ user, actor, params, body }) => updateItem(user, actor, params.id, params.itemId, await body(itemSchema)));
+
+export const DELETE = authed(ALL_ROLES, async ({ req, user, actor, params }) => {
+  await removeItem(user, actor, params.id, params.itemId, req.nextUrl.searchParams.get("notify") === "1");
   return null;
 });

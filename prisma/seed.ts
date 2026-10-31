@@ -46,7 +46,7 @@ async function main() {
   const kumar = await user("Kumar", "worker2@serveai.local", "WORKER", "919000000102");
   const workers = [raj, kumar];
 
-  await db.serviceType.createMany({ data: SERVICE_TYPES.map((name) => ({ name })) });
+  await db.serviceType.createMany({ data: SERVICE_TYPES.map((name) => ({ name })), skipDuplicates: true });
 
   const customers = [];
   for (let i = 0; i < CUSTOMERS.length; i++) {

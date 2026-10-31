@@ -2,6 +2,7 @@ import type { Customer, MessageStatus, ServiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { rupees } from "@/lib/format";
 import { SendieeError, sendieeClient } from "@/lib/sendiee";
+import type { StepKey } from "@/lib/message-steps";
 import { appUrl, fill, getSettings, statusMessageKey, trackingUrl } from "@/lib/settings";
 import { STATUS_LABEL } from "@/lib/status";
 
@@ -106,6 +107,11 @@ async function notify(args: {
       data: { customerId: args.customer.id, serviceJobId: args.serviceJobId, kind: args.kind, status, detail },
     });
 
+  if (!args.text.trim()) {
+    await record("SKIPPED", "Message is blank in Customer Messages");
+    return;
+  }
+
   try {
     if (await isWindowOpen(args.customer.id)) {
       await sendFreeformText(spec);
@@ -123,28 +129,77 @@ async function notify(args: {
   }
 }
 
-const vars = (job: JobContext, extra: Record<string, string> = {}) => ({
+type Settings = Awaited<ReturnType<typeof getSettings>>;
+
+const vars = (job: JobContext, settings: Settings, extra: Record<string, string> = {}) => ({
   customer_name: job.customer.name,
   service_number: job.serviceNumber,
   vehicle_model: `${job.vehicle.brand} ${job.vehicle.model}`,
   registration: job.vehicle.registrationNumber,
   tracking_link: trackingUrl(job.trackingToken),
+  garage_name: settings.center_name,
+  garage_phone: settings.center_phone,
   ...extra,
 });
+
+/** Sends one step of the message map, honouring its on/off switch and its own template if it has one. */
+async function notifyStep(args: {
+  step: StepKey;
+  kind: string;
+  job: JobContext;
+  settings: Settings;
+  text: string;
+  defaultTemplate: string;
+  templateParams: string[];
+}) {
+  const { step, kind, job, settings } = args;
+  if (settings[`notify_${step}`] === "false") {
+    await db.notification.create({
+      data: { customerId: job.customer.id, serviceJobId: job.id, kind, status: "SKIPPED", detail: "Turned off in Customer Messages" },
+    });
+    return;
+  }
+  await notify({
+    kind,
+    customer: job.customer,
+    serviceJobId: job.id,
+    text: args.text,
+    templateName: settings[`tpl_${step}`] || args.defaultTemplate,
+    templateParams: args.templateParams,
+    language: settings.template_language,
+  });
+}
 
 export const NotificationService = {
   async sendServiceStatusUpdate(job: JobContext, status: ServiceStatus, finalAmount?: unknown) {
     const settings = await getSettings();
-    let text = fill(settings[statusMessageKey(status)], vars(job));
+    let text = fill(settings[statusMessageKey(status)], vars(job, settings));
     if (status === "READY_FOR_DELIVERY" && finalAmount) text += `\nFinal amount: ${rupees(finalAmount as number)}`;
-    await notify({
+    await notifyStep({
+      step: status,
       kind: `STATUS_${status}`,
-      customer: job.customer,
-      serviceJobId: job.id,
+      job,
+      settings,
       text,
-      templateName: settings.template_status_update,
+      defaultTemplate: settings.template_status_update,
       templateParams: [job.customer.name, job.serviceNumber, STATUS_LABEL[status], trackingUrl(job.trackingToken)],
-      language: settings.template_language,
+    });
+  },
+
+  /** A part, labour or cost changed. Outside the window, the status template carries the change as its status text. */
+  async sendBillChange(job: JobContext, step: "ITEM_ADDED" | "ITEM_UPDATED" | "ITEM_REMOVED", item: { name: string; cost: unknown }, billTotal: number) {
+    const settings = await getSettings();
+    const cost = rupees(item.cost as number);
+    const total = rupees(billTotal);
+    const summary = { ITEM_ADDED: `Added ${item.name} (${cost})`, ITEM_UPDATED: `Updated ${item.name} to ${cost}`, ITEM_REMOVED: `Removed ${item.name}` }[step];
+    await notifyStep({
+      step,
+      kind: step,
+      job,
+      settings,
+      text: fill(settings[`msg_${step}`], vars(job, settings, { item_name: item.name, item_cost: cost, bill_total: total })),
+      defaultTemplate: settings.template_status_update,
+      templateParams: [job.customer.name, job.serviceNumber, `${summary}. Bill now ${total}`, trackingUrl(job.trackingToken)],
     });
   },
 
@@ -154,40 +209,40 @@ export const NotificationService = {
 
   async sendServiceRequestReceived(job: JobContext) {
     const settings = await getSettings();
-    await notify({
+    await notifyStep({
+      step: "NEW",
       kind: "SERVICE_REQUEST_RECEIVED",
-      customer: job.customer,
-      serviceJobId: job.id,
-      text: `Thanks! We've received your service request. Your service ID is ${job.serviceNumber}.\nTrack it here: ${trackingUrl(job.trackingToken)}`,
-      templateName: settings.template_status_update,
+      job,
+      settings,
+      text: fill(settings.msg_NEW, vars(job, settings)),
+      defaultTemplate: settings.template_status_update,
       templateParams: [job.customer.name, job.serviceNumber, STATUS_LABEL.NEW, trackingUrl(job.trackingToken)],
-      language: settings.template_language,
     });
   },
 
   async sendPaymentRequest(job: JobContext, amount: unknown, paymentLink: string) {
     const settings = await getSettings();
-    await notify({
+    await notifyStep({
+      step: "PAYMENT_REQUEST",
       kind: "PAYMENT_REQUEST",
-      customer: job.customer,
-      serviceJobId: job.id,
-      text: `Your final service amount is ${rupees(amount as number)}.\nClick below to view your invoice and make payment.\n${paymentLink}`,
-      templateName: settings.template_payment_request,
+      job,
+      settings,
+      text: fill(settings.msg_PAYMENT_REQUEST, vars(job, settings, { amount: rupees(amount as number), payment_link: paymentLink })),
+      defaultTemplate: settings.template_payment_request,
       templateParams: [job.customer.name, rupees(amount as number), job.serviceNumber, paymentLink],
-      language: settings.template_language,
     });
   },
 
   async sendPaymentConfirmation(job: JobContext, amount: unknown) {
     const settings = await getSettings();
-    await notify({
+    await notifyStep({
+      step: "PAYMENT_CONFIRMATION",
       kind: "PAYMENT_CONFIRMATION",
-      customer: job.customer,
-      serviceJobId: job.id,
-      text: `Payment of ${rupees(amount as number)} has been received successfully.\nThank you for choosing ${settings.center_name}.`,
-      templateName: settings.template_payment_confirmation,
+      job,
+      settings,
+      text: fill(settings.msg_PAYMENT_CONFIRMATION, vars(job, settings, { amount: rupees(amount as number) })),
+      defaultTemplate: settings.template_payment_confirmation,
       templateParams: [job.customer.name, rupees(amount as number), job.serviceNumber],
-      language: settings.template_language,
     });
   },
 
@@ -199,14 +254,14 @@ export const NotificationService = {
       customerId: job.customer.id,
       phone: job.customer.phone,
       serviceJobId: job.id,
-      text: `Invoice ${invoiceNumber} for ${job.serviceNumber}`,
+      text: fill(settings.msg_INVOICE, vars(job, settings, { invoice_number: invoiceNumber })),
     };
     if (await isWindowOpen(job.customer.id)) {
       await sendDocument(spec, link, `${invoiceNumber}.pdf`);
     } else {
       await sendTemplateText(
         spec,
-        settings.template_invoice,
+        settings.tpl_INVOICE || settings.template_invoice,
         [job.customer.name, invoiceNumber, job.serviceNumber, link],
         settings.template_language,
       );

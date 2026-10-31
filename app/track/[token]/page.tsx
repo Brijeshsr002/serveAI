@@ -3,6 +3,8 @@ import type { ServiceStatus } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { Check, Phone } from "lucide-react";
 import { ActionButton } from "@/components/actions";
+import { RoadScene } from "@/components/car-art";
+import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
 import { PaymentBadge, StatusBadge } from "@/components/ui-kit";
 import { buttonVariants } from "@/components/ui/button";
@@ -17,7 +19,20 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-const STEPS: ServiceStatus[] = STATUSES.filter((s) => s !== "CANCELLED" && s !== "WAITING_FOR_PARTS");
+/** Plain words for customers, so nobody has to decode a status name. */
+const STATUS_HINT: Record<ServiceStatus, string> = {
+  NEW: "We have your request.",
+  ASSIGNED: "Our team will start on your car soon.",
+  VEHICLE_RECEIVED: "Your car is with us.",
+  INSPECTION: "We are checking your car.",
+  SERVICE_IN_PROGRESS: "We are working on your car.",
+  WAITING_FOR_PARTS: "We are waiting for a part.",
+  READY_FOR_DELIVERY: "Your car is ready to collect.",
+  COMPLETED: "All done. Thank you!",
+  CANCELLED: "This service was cancelled.",
+};
+
+const STEPS: ServiceStatus[] =STATUSES.filter((s) => s !== "CANCELLED" && s !== "WAITING_FOR_PARTS");
 
 export default async function TrackPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -31,18 +46,18 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
   return (
     <main className="mx-auto min-h-screen max-w-lg space-y-4 bg-background p-4">
       <header className="flex items-center justify-between pt-2">
-        <Logo className="h-8" />
-        <span className="text-xs text-muted-foreground">{view.serviceNumber}</span>
+        <Logo name={view.serviceCenter.name} />
+        <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground"><LiveRefresh /> {view.serviceNumber}</span>
       </header>
 
-      <section className="rounded-xl border p-4">
-        <p className="text-sm text-muted-foreground">Hi {view.customerName}</p>
-        <h1 className="mt-1 text-lg font-semibold">{view.vehicle.brand} {view.vehicle.model}</h1>
-        <p className="text-sm font-medium tracking-wide">{view.vehicle.registrationNumber}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{view.serviceType}</p>
+      <RoadScene className="rounded-xl px-4 pt-4 pb-14">
+        <p className="text-sm text-slate-300">Hi {view.customerName}</p>
+        <p className="mt-1 text-xl font-semibold text-balance">{STATUS_HINT[view.status]}</p>
+        <h1 className="mt-3 font-medium">{view.vehicle.brand} {view.vehicle.model} · {view.vehicle.registrationNumber}</h1>
+        <p className="text-sm text-slate-300">{view.serviceType}</p>
         <div className="mt-3"><StatusBadge status={view.status} /></div>
-        {view.completedAt && <p className="mt-2 text-sm text-muted-foreground">Completed {dateTime(view.completedAt)}</p>}
-      </section>
+        {view.completedAt && <p className="mt-2 text-sm text-slate-300">Completed {dateTime(view.completedAt)}</p>}
+      </RoadScene>
 
       <section className="rounded-xl border p-4">
         <h2 className="mb-3 font-medium">Progress</h2>
@@ -74,9 +89,18 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
           <h2 className="font-medium">Cost</h2>
           <PaymentBadge status={view.paymentStatus as "PAID"} />
         </div>
+        {view.items.length > 0 && (
+          <ul className="space-y-1 border-b pb-3 text-sm">
+            {view.items.map((item, i) => (
+              <li key={i} className="flex justify-between gap-3"><span className="min-w-0 break-words">{item.name}{item.quantity !== "1" && ` × ${item.quantity}`}</span><span className="shrink-0">{money(item.total)}</span></li>
+            ))}
+          </ul>
+        )}
         <dl className="space-y-1 text-sm">
           <div className="flex justify-between"><dt className="text-muted-foreground">Estimated</dt><dd>{money(view.estimatedAmount)}</dd></div>
-          <div className="flex justify-between font-semibold"><dt>Final amount</dt><dd>{money(view.finalAmount)}</dd></div>
+          {view.finalAmount
+            ? <div className="flex justify-between text-base font-semibold"><dt>Final amount</dt><dd>{money(view.finalAmount)}</dd></div>
+            : view.items.length > 0 && <div className="flex justify-between text-base font-semibold"><dt>Bill so far</dt><dd>{money(view.billSoFar)}</dd></div>}
         </dl>
         {view.hasInvoice && !paid && view.status !== "CANCELLED" && (
           <ActionButton label="Pay now" size="lg" className="w-full" endpoint={`/api/track/${token}/pay`} openKey="paymentLink" />
@@ -91,7 +115,7 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
         {view.serviceCenter.address && <p className="text-muted-foreground">{view.serviceCenter.address}</p>}
         {view.serviceCenter.phone && (
           <a className={cn(buttonVariants({ variant: "outline", size: "lg" }), "mt-3 w-full")} href={`tel:${view.serviceCenter.phone}`}>
-            <Phone className="mr-2 size-4" /> Contact service center
+            <Phone className="mr-2 size-4" /> Call the garage
           </a>
         )}
       </section>
