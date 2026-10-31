@@ -29,7 +29,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const user = await requireRole(STAFF);
   const base = roleBase[user.role];
   const { q, status, view } = await searchParams;
-  const board = view === "board";
+  const board = view !== "list";
   const term = q?.trim();
   const reg = term ? normalizeRegistration(term) : "";
   const where: Prisma.ServiceJobWhereInput = {
@@ -65,10 +65,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   };
   return (
     <>
-      <PageHeader title="Service Jobs" subtitle={board ? `${statusCounts.reduce((sum, c) => sum + c._count, 0)} total` : `${jobs.length} shown`}>
-        <nav aria-label="Job view" className="flex rounded-lg border p-0.5 text-sm">
-          <Link href={viewLink()} aria-current={board ? undefined : "page"} className={cn("rounded-md px-2.5 py-0.5 hover:bg-accent", !board && "bg-accent font-medium")}>List</Link>
-          <Link href={viewLink("board")} aria-current={board ? "page" : undefined} className={cn("rounded-md px-2.5 py-0.5 hover:bg-accent", board && "bg-accent font-medium")}>Board</Link>
+      <PageHeader title={board ? "Kanban Board" : "Service Jobs"} subtitle={board ? `${statusCounts.reduce((sum, c) => sum + c._count, 0)} total` : `${jobs.length} shown`}>
+        <nav aria-label="Job view" className="flex rounded-lg border bg-card p-0.5 text-sm">
+          <Link href={viewLink()} aria-current={board ? "page" : undefined} className={cn("rounded-md px-3 py-1 hover:bg-accent", board && "bg-primary font-medium text-primary-foreground hover:bg-primary")}>Kanban</Link>
+          <Link href={viewLink("list")} aria-current={board ? undefined : "page"} className={cn("rounded-md px-3 py-1 hover:bg-accent", !board && "bg-primary font-medium text-primary-foreground hover:bg-primary")}>List</Link>
         </nav>
         <NewJobDialog
           base={base}
@@ -82,7 +82,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           }))}
         />
       </PageHeader>
-      <SearchForm q={q} view={board ? "board" : undefined} placeholder="Search service number, customer, registration" />
+      <SearchForm q={q} view={board ? undefined : "list"} placeholder="Search service number, customer, registration" />
       {board ? (
         <JobBoard
           base={base}
@@ -105,7 +105,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         <>
       <div className="mb-4 flex flex-wrap gap-1.5 text-xs">
         {[undefined, ...STATUSES].map((s) => (
-          <Link key={s ?? "all"} href={s ? `?status=${s}` : "?"} className={cn("rounded-full border px-2.5 py-1 hover:bg-accent", status === s && "border-primary text-primary")}>
+          <Link key={s ?? "all"} href={s ? `?view=list&status=${s}` : "?view=list"} className={cn("rounded-full border px-2.5 py-1 hover:bg-accent", status === s && "border-primary text-primary")}>
             {s ? STATUS_LABEL[s] : "All"}
           </Link>
         ))}

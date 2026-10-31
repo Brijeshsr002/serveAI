@@ -8,6 +8,8 @@ import {
   Activity, BarChart3, Car, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
   Search, Settings, ShieldCheck, Tags, User, Users, Wrench, X, type LucideIcon,
 } from "lucide-react";
+import { FormDialog } from "@/components/actions";
+import { customerFields } from "@/components/forms-config";
 import { Input } from "@/components/ui/input";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
@@ -21,7 +23,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Dashboard", "/admin/dashboard", LayoutDashboard],
     ["Customers", "/admin/customers", Users],
     ["Vehicles", "/admin/vehicles", Car],
-    ["Service Jobs", "/admin/jobs", ListChecks],
+    ["Kanban Board", "/admin/jobs", ListChecks],
     ["Workers", "/admin/workers", Wrench],
     ["Receptionists", "/admin/receptionists", ShieldCheck],
     ["Payments", "/admin/payments", CreditCard],
@@ -37,7 +39,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Dashboard", "/reception/dashboard", LayoutDashboard],
     ["Customers", "/reception/customers", Users],
     ["Vehicles", "/reception/vehicles", Car],
-    ["Service Jobs", "/reception/jobs", ListChecks],
+    ["Kanban Board", "/reception/jobs", ListChecks],
     ["Payments", "/reception/payments", CreditCard],
     ["WhatsApp", "/reception/whatsapp", MessageCircle],
   ],
@@ -163,7 +165,12 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2.5">
           <button aria-label="Open menu" className="p-1 lg:hidden" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
           {role === "WORKER" ? <Logo name={garage} className="lg:hidden" /> : <GlobalSearch base={base} canSeeInvoices={role === "ADMIN"} />}
-          <LiveRefresh className="ml-auto" />
+          {role !== "WORKER" && (
+            <div className="ml-auto shrink-0">
+              <FormDialog trigger="+ Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />
+            </div>
+          )}
+          <LiveRefresh className={role === "WORKER" ? "ml-auto" : undefined} />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -74,7 +75,10 @@ export function NewJobDialog({
         <DialogHeader><DialogTitle>New service job</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="customerId">Customer *</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="customerId">Customer *</Label>
+              <Link href={`${base}/customers`} className="text-xs font-medium text-primary hover:underline">+ New customer</Link>
+            </div>
             <Input aria-label="Filter customers" placeholder="Filter by name or phone" value={filter} onChange={(e) => setFilter(e.target.value)} />
             <select id="customerId" required className={SELECT_CLASS} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
               <option value="">Select customer…</option>

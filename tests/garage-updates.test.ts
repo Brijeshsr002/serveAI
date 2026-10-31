@@ -101,7 +101,7 @@ describe("customer messages", () => {
     await openWindow(customer.id);
     const { assignWorker } = await import("@/lib/services/jobs");
     await assignWorker(SYSTEM_ACTOR, job.id, worker.id);
-    expect(JSON.stringify(sendieeCalls()[0].body)).toContain("Hello from My Car Garage");
+    expect(JSON.stringify(sendieeCalls()[0].body)).toContain("Hello from Car's Spa");
 
     fake.calls = [];
     await call(saveSettings, "PATCH", { cookie: admin, body: { notify_VEHICLE_RECEIVED: "false" } });

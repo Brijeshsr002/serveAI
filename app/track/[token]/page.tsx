@@ -3,7 +3,8 @@ import type { ServiceStatus } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { Check, Phone } from "lucide-react";
 import { ActionButton } from "@/components/actions";
-import { RoadScene } from "@/components/car-art";
+import { LiveScene } from "@/components/live-scene";
+import { CLIPS } from "@/lib/media-clips";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
 import { PaymentBadge, StatusBadge } from "@/components/ui-kit";
@@ -50,14 +51,16 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
         <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground"><LiveRefresh /> {view.serviceNumber}</span>
       </header>
 
-      <RoadScene className="rounded-xl px-4 pt-4 pb-14">
+      <LiveScene clips={CLIPS.service} className="rounded-2xl" overlay="bg-slate-950/70">
+        <div className="p-4">
         <p className="text-sm text-slate-300">Hi {view.customerName}</p>
         <p className="mt-1 text-xl font-semibold text-balance">{STATUS_HINT[view.status]}</p>
         <h1 className="mt-3 font-medium">{view.vehicle.brand} {view.vehicle.model} · {view.vehicle.registrationNumber}</h1>
         <p className="text-sm text-slate-300">{view.serviceType}</p>
         <div className="mt-3"><StatusBadge status={view.status} /></div>
         {view.completedAt && <p className="mt-2 text-sm text-slate-300">Completed {dateTime(view.completedAt)}</p>}
-      </RoadScene>
+        </div>
+      </LiveScene>
 
       <section className="rounded-xl border p-4">
         <h2 className="mb-3 font-medium">Progress</h2>

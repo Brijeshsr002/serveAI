@@ -1,20 +1,20 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CarGlyph } from "@/components/car-art";
+import { useId } from "react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const LANE_COLORS = ["#EA580C", "#0F766E", "#1D4ED8", "#BE123C", "#7C3AED", "#CA8A04"];
-const REVENUE = "#EA580C";
+const COLORS = ["#EA580C", "#0F766E", "#1D4ED8", "#BE123C", "#7C3AED", "#A16207", "#0369A1", "#4D7C0F", "#475569"];
 const INK = "#64748b";
-const GRID = "#eceef2";
+const GRID = "#eef1f5";
 
 type Row = Record<string, string | number>;
 
 const inr = (v: number) => `₹${new Intl.NumberFormat("en-IN").format(v)}`;
+const shortInr = (v: number) => (v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`);
 
 function DataTable({ rows, keys, currency }: { rows: Row[]; keys: { key: string; label: string }[]; currency?: boolean }) {
   return (
-    <details className="mt-2 text-xs text-muted-foreground">
+    <details className="mt-3 text-xs text-muted-foreground">
       <summary className="cursor-pointer">View as table</summary>
       <table className="mt-1 w-full">
         <thead><tr><th className="text-left font-medium">Name</th>{keys.map((k) => <th key={k.key} className="text-right font-medium">{k.label}</th>)}</tr></thead>
@@ -31,56 +31,37 @@ function DataTable({ rows, keys, currency }: { rows: Row[]; keys: { key: string;
   );
 }
 
-/** A race lane: the car has driven further the higher the value. */
-function Lane({ value, max, color, label }: { value: number; max: number; color: string; label: string }) {
-  const distance = max > 0 ? (value / max) * 100 : 0;
+function Meter({ value, max, color }: { value: number; max: number; color: string }) {
   return (
-    <div className="flex items-center gap-2" title={`${label}: ${value}`}>
-      <div className="relative h-7 min-w-0 flex-1 rounded-md bg-slate-800">
-        <div className="road-dashes absolute inset-x-1 top-1/2 h-px -translate-y-1/2 opacity-40" />
-        <div className="absolute inset-y-0 left-0 rounded-md opacity-90" style={{ width: `calc((100% - 44px) * ${distance / 100} + 22px)`, backgroundColor: color }} />
-        <div className="absolute top-1/2 -translate-y-1/2" style={{ left: `calc((100% - 44px) * ${distance / 100})` }}>
-          <CarGlyph color="#fff" className="h-[18px] w-11 drop-shadow" />
-        </div>
-      </div>
-      <span className="w-8 shrink-0 text-right text-sm font-semibold tabular-nums">{value}</span>
+    <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+      <div className="h-full rounded-full" style={{ width: `${max > 0 ? Math.max((value / max) * 100, value > 0 ? 3 : 0) : 0}%`, backgroundColor: color }} />
     </div>
   );
 }
 
-function RevenueChart({ data, label }: { data: Row[]; label: string }) {
-  const id = `revenue-${label}-${data.length}`.replace(/\W/g, "");
+function RevenueBars({ data, label }: { data: Row[]; label: string }) {
+  const id = useId().replace(/\W/g, "");
+  const total = data.reduce((sum, r) => sum + Number(r.value), 0);
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ right: 28, top: 22 }}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={REVENUE} stopOpacity={0.45} />
-            <stop offset="100%" stopColor={REVENUE} stopOpacity={0.03} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="name" tick={{ fontSize: 11, fill: INK }} axisLine={false} tickLine={false} />
-        <YAxis width={60} allowDecimals={false} tick={{ fontSize: 11, fill: INK }} axisLine={false} tickLine={false} tickFormatter={inr} />
-        <Tooltip formatter={(v) => [inr(Number(v)), label]} cursor={{ stroke: REVENUE, strokeDasharray: "4 4" }} />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={REVENUE}
-          strokeWidth={3}
-          fill={`url(#${id})`}
-          isAnimationActive={false}
-          // The car rides the line and parks on the latest figure.
-          dot={(props: { cx?: number; cy?: number; index?: number }) =>
-            props.index === data.length - 1 && props.cx !== undefined && props.cy !== undefined ? (
-              <svg key={props.index} x={props.cx - 26} y={props.cy - 22} width={52} height={20} viewBox="0 0 120 46"><CarGlyph color="#0F172A" /></svg>
-            ) : (
-              <g key={props.index} />
-            )
-          }
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <>
+      <p className="text-2xl font-bold tabular-nums">{inr(total)}</p>
+      <p className="mb-3 text-xs text-muted-foreground">Total for this period</p>
+      <ResponsiveContainer width="100%" height={210}>
+        <BarChart data={data} margin={{ right: 4, top: 8, left: 0 }}>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#F97316" />
+              <stop offset="100%" stopColor="#C2410C" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={GRID} vertical={false} />
+          <XAxis dataKey="name" tick={{ fontSize: 11, fill: INK }} axisLine={false} tickLine={false} minTickGap={16} />
+          <YAxis width={44} allowDecimals={false} tick={{ fontSize: 11, fill: INK }} axisLine={false} tickLine={false} tickFormatter={shortInr} />
+          <Tooltip formatter={(v) => [inr(Number(v)), label]} cursor={{ fill: "rgba(234,88,12,0.07)" }} contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0" }} />
+          <Bar dataKey="value" fill={`url(#${id})`} radius={[6, 6, 0, 0]} maxBarSize={36} />
+        </BarChart>
+      </ResponsiveContainer>
+    </>
   );
 }
 
@@ -91,16 +72,19 @@ export function SingleBarChart({ data, label, currency, horizontal }: { data: Ro
   return (
     <>
       {horizontal ? (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {data.map((r, i) => (
-            <li key={String(r.name)} className="grid grid-cols-[7.5rem_1fr] items-center gap-2 text-xs">
-              <span className="truncate font-medium" title={String(r.name)}>{r.name}</span>
-              <Lane value={Number(r.value)} max={max} color={LANE_COLORS[i % LANE_COLORS.length]} label={label} />
+            <li key={String(r.name)} className="text-sm">
+              <div className="mb-1 flex justify-between gap-3">
+                <span className="min-w-0 truncate" title={String(r.name)}>{r.name}</span>
+                <span className="font-semibold tabular-nums">{r.value}</span>
+              </div>
+              <Meter value={Number(r.value)} max={max} color={COLORS[i % COLORS.length]} />
             </li>
           ))}
         </ul>
       ) : (
-        <RevenueChart data={data} label={label} />
+        <RevenueBars data={data} label={label} />
       )}
       <DataTable rows={data} keys={[{ key: "value", label }]} currency={currency} />
     </>
@@ -112,16 +96,18 @@ export function WorkerChart({ data }: { data: Row[] }) {
   const max = Math.max(...data.flatMap((r) => [Number(r.completed), Number(r.active)]));
   return (
     <>
-      <div className="mb-3 flex gap-4 text-xs">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: LANE_COLORS[0] }} /> Completed</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: LANE_COLORS[1] }} /> Active</span>
-      </div>
-      <ul className="space-y-3">
+      <ul className="space-y-4">
         {data.map((r) => (
-          <li key={String(r.name)} className="space-y-1">
-            <p className="truncate text-xs font-medium">{r.name}</p>
-            <Lane value={Number(r.completed)} max={max} color={LANE_COLORS[0]} label="Completed" />
-            <Lane value={Number(r.active)} max={max} color={LANE_COLORS[1]} label="Active" />
+          <li key={String(r.name)} className="text-sm">
+            <p className="mb-1.5 truncate font-medium">{r.name}</p>
+            <div className="grid grid-cols-[5rem_1fr_1.5rem] items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Completed</span>
+              <Meter value={Number(r.completed)} max={max} color={COLORS[0]} />
+              <span className="text-right font-semibold tabular-nums">{r.completed}</span>
+              <span className="text-muted-foreground">Active</span>
+              <Meter value={Number(r.active)} max={max} color={COLORS[1]} />
+              <span className="text-right font-semibold tabular-nums">{r.active}</span>
+            </div>
           </li>
         ))}
       </ul>

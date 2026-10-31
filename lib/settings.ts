@@ -5,7 +5,7 @@ import { MESSAGE_STEPS, type StepKey } from "@/lib/message-steps";
 export { fill } from "@/lib/message-steps";
 
 const BASE_DEFAULTS = {
-  center_name: "My Car Garage",
+  center_name: "Car's Spa",
   center_phone: "",
   center_address: "",
   whatsapp_commands_enabled: "true",

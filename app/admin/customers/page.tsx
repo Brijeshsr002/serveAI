@@ -25,7 +25,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader title="Customers" subtitle={`${customers.length} shown`}>
-        <FormDialog trigger="Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />
+        <FormDialog trigger="+ Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />
       </PageHeader>
       <SearchForm q={q} placeholder="Search name, phone, vehicle number, customer ID" />
       <Section title="All customers">
