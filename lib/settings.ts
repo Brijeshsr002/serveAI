@@ -2,7 +2,7 @@ import type { ServiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 
 export const SETTING_DEFAULTS = {
-  center_name: "ServeAI Service Center",
+  center_name: "ServAI Service Center",
   center_phone: "",
   center_address: "",
   whatsapp_commands_enabled: "true",

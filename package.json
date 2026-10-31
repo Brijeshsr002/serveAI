@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:local": "node scripts/local-db.mjs",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "admin:create": "node scripts/create-admin.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

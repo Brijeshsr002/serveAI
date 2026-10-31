@@ -1,5 +1,3 @@
-import type { NextConfig } from "next";
-
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -14,8 +12,8 @@ const securityHeaders = [
   },
 ];
 
-const nextConfig: NextConfig = {
-  output: "standalone",
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["pdfkit", "@prisma/client", "bcryptjs"],
   async headers() {
