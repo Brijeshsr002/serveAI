@@ -1,0 +1,18 @@
+node_modules/
+.next/
+out/
+coverage/
+next-env.d.ts
+*.tsbuildinfo
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# local databases
+.pgdata/
+.pgtest/
+
+*.log
+.DS_Store

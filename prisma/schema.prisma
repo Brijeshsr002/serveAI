@@ -1,0 +1,403 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RECEPTIONIST
+  WORKER
+}
+
+enum ServiceStatus {
+  NEW
+  ASSIGNED
+  VEHICLE_RECEIVED
+  INSPECTION
+  SERVICE_IN_PROGRESS
+  WAITING_FOR_PARTS
+  READY_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ItemType {
+  LABOUR
+  PART
+  SERVICE
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  ACCEPTED
+  SENT
+  DELIVERED
+  READ
+  RECEIVED
+  FAILED
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String   @map("password_hash")
+  role         Role
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  assignedJobs   ServiceJob[]    @relation("AssignedWorker")
+  createdJobs    ServiceJob[]    @relation("CreatedBy")
+  statusChanges  ServiceStatusHistory[]
+  activityLogs   ActivityLog[]
+
+  @@index([role, active])
+  @@map("users")
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  customerCode String   @unique @map("customer_code")
+  name         String
+  /// Digits only, full international format (Sendiee's stored form), e.g. 919876543210.
+  phone        String   @unique
+  /// Sendiee business-scoped user id. Webhooks may carry this instead of a phone.
+  bsuid        String?  @unique
+  email        String?
+  address      String?
+  city         String?
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  vehicles      Vehicle[]
+  serviceJobs   ServiceJob[]
+  payments      Payment[]
+  messages      WhatsappMessage[]
+  conversation  WhatsappConversation?
+  notifications Notification[]
+
+  @@index([name])
+  @@map("customers")
+}
+
+model Vehicle {
+  id                 String   @id @default(cuid())
+  vehicleCode        String   @unique @map("vehicle_code")
+  customerId         String   @map("customer_id")
+  /// Uppercase with no spaces or dashes, e.g. TN38AB1234.
+  registrationNumber String   @unique @map("registration_number")
+  brand              String
+  model              String
+  variant            String?
+  manufacturingYear  Int?     @map("manufacturing_year")
+  fuelType           String?  @map("fuel_type")
+  color              String?
+  odometer           Int?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceJobs ServiceJob[]
+
+  @@index([customerId])
+  @@map("vehicles")
+}
+
+model ServiceType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("service_types")
+}
+
+model ServiceJob {
+  id                 String        @id @default(cuid())
+  serviceNumber      String        @unique @map("service_number")
+  customerId         String        @map("customer_id")
+  vehicleId          String        @map("vehicle_id")
+  assignedWorkerId   String?       @map("assigned_worker_id")
+  createdById        String?       @map("created_by")
+  serviceType        String        @map("service_type")
+  customerComplaint  String?       @map("customer_complaint")
+  internalNotes      String?       @map("internal_notes")
+  estimatedAmount    Decimal?      @map("estimated_amount") @db.Decimal(12, 2)
+  finalAmount        Decimal?      @map("final_amount") @db.Decimal(12, 2)
+  status             ServiceStatus @default(NEW)
+  priority           Priority      @default(NORMAL)
+  appointmentDate    DateTime?     @map("appointment_date")
+  expectedCompletion DateTime?     @map("expected_completion")
+  actualCompletion   DateTime?     @map("actual_completion")
+  trackingToken      String        @unique @map("tracking_token")
+  /// Caller-supplied key so a re-delivered WhatsApp intake cannot create a second job.
+  externalRef        String?       @unique @map("external_ref")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  customer       Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle                @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  assignedWorker User?                  @relation("AssignedWorker", fields: [assignedWorkerId], references: [id], onDelete: SetNull)
+  createdBy      User?                  @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  statusHistory  ServiceStatusHistory[]
+  items          ServiceItem[]
+  payments       Payment[]
+  invoice        Invoice?
+  messages       WhatsappMessage[]
+  notifications  Notification[]
+
+  @@index([status])
+  @@index([assignedWorkerId])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([createdAt])
+  @@map("service_jobs")
+}
+
+model ServiceStatusHistory {
+  id            String         @id @default(cuid())
+  serviceJobId  String         @map("service_job_id")
+  oldStatus     ServiceStatus? @map("old_status")
+  newStatus     ServiceStatus  @map("new_status")
+  changedById   String?        @map("changed_by")
+  changedByRole String         @map("changed_by_role")
+  notes         String?
+  isOverride    Boolean        @default(false) @map("is_override")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  serviceJob ServiceJob @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
+  changedBy  User?      @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([serviceJobId, createdAt])
+  @@map("service_status_history")
+}
+
+model ServiceItem {
+  id           String   @id @default(cuid())
+  serviceJobId String   @map("service_job_id")
+  itemType     ItemType @map("item_type")
+  name         String
+  description  String?
+  quantity     Decimal  @default(1) @db.Decimal(10, 2)
+  unitPrice    Decimal  @map("unit_price") @db.Decimal(12, 2)
+  /// Tax amount for the line, in rupees (not a percentage).
+  tax          Decimal  @default(0) @db.Decimal(12, 2)
+  /// Discount amount for the line, in rupees (not a percentage).
+  discount     Decimal  @default(0) @db.Decimal(12, 2)
+  total        Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  serviceJob ServiceJob @relation(fields: [serviceJobId], references: [id], onDelete: Cascade)
+
+  @@index([serviceJobId])
+  @@map("service_items")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  serviceJobId    String        @map("service_job_id")
+  customerId      String        @map("customer_id")
+  amount          Decimal       @db.Decimal(12, 2)
+  currency        String        @default("INR")
+  paymentProvider String        @map("payment_provider")
+  /// Provider's order / link / session id; what webhooks are matched against.
+  paymentOrderId  String?       @unique @map("payment_order_id")
+  paymentId       String?       @map("payment_id")
+  status          PaymentStatus @default(PENDING)
+  paymentLink     String?       @map("payment_link")
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  serviceJob ServiceJob @relation(fields: [serviceJobId], references: [id], onDelete: Restrict)
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([serviceJobId])
+  @@index([paymentId])
+  @@map("payments")
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique @map("invoice_number")
+  serviceJobId  String   @unique @map("service_job_id")
+  labourTotal   Decimal  @map("labour_total") @db.Decimal(12, 2)
+  partsTotal    Decimal  @map("parts_total") @db.Decimal(12, 2)
+  subtotal      Decimal  @db.Decimal(12, 2)
+  tax           Decimal  @db.Decimal(12, 2)
+  discount      Decimal  @db.Decimal(12, 2)
+  total         Decimal  @db.Decimal(12, 2)
+  invoiceDate   DateTime @default(now()) @map("invoice_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  serviceJob ServiceJob    @relation(fields: [serviceJobId], references: [id], onDelete: Restrict)
+  items      InvoiceItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id        String   @id @default(cuid())
+  invoiceId String   @map("invoice_id")
+  itemType  ItemType @map("item_type")
+  name      String
+  quantity  Decimal  @db.Decimal(10, 2)
+  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  tax       Decimal  @db.Decimal(12, 2)
+  discount  Decimal  @db.Decimal(12, 2)
+  total     Decimal  @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model WhatsappConversation {
+  id              String    @id @default(cuid())
+  customerId      String    @unique @map("customer_id")
+  /// Sendiee conversation id, once known from the Chats API.
+  sendieeId       String?   @map("sendiee_id")
+  lastMessage     String?   @map("last_message")
+  lastMessageAt   DateTime? @map("last_message_at")
+  /// Start of Meta's 24-hour window is derived from this.
+  lastInboundAt   DateTime? @map("last_inbound_at")
+  unreadCount     Int       @default(0) @map("unread_count")
+  status          String?
+  /// Active vehicle choices offered to a multi-vehicle customer, awaiting a reply.
+  pendingChoice   Json?     @map("pending_choice")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([lastMessageAt])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsappMessage {
+  id               String           @id @default(cuid())
+  customerId       String           @map("customer_id")
+  serviceJobId     String?          @map("service_job_id")
+  direction        MessageDirection
+  messageType      String           @default("text") @map("message_type")
+  content          String
+  /// wamid from Sendiee. Unique, so a redelivered webhook cannot store a message twice.
+  sendieeMessageId String?          @unique @map("sendiee_message_id")
+  status           MessageStatus    @default(QUEUED)
+  error            String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt])
+  @@map("whatsapp_messages")
+}
+
+model Notification {
+  id           String             @id @default(cuid())
+  customerId   String             @map("customer_id")
+  serviceJobId String?            @map("service_job_id")
+  kind         String
+  status       NotificationStatus
+  detail       String?
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceJob ServiceJob? @relation(fields: [serviceJobId], references: [id], onDelete: SetNull)
+
+  @@index([serviceJobId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  /// ADMIN / RECEPTIONIST / WORKER / CUSTOMER / SYSTEM
+  actorRole  String   @map("actor_role")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  summary    String
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+/// Atomic counters behind CUS-000001, SRV-2026-000001, INV-2026-000001.
+model Sequence {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("sequences")
+}
+
+/// Processed webhook deliveries, unique per provider + event id, for idempotency.
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  provider  String
+  eventId   String   @map("event_id")
+  eventType String?  @map("event_type")
+  outcome   String?
+  /// Kept only for payloads we could not parse, since Sendiee has not published its format.
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
+}
