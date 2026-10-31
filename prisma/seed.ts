@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { ItemType, PrismaClient, ServiceStatus } from "@prisma/client";
 
 const db = new PrismaClient();
-export const DEV_PASSWORD = "ServeAI@123";
+export const DEV_PASSWORD = process.env.SEED_PASSWORD || "ServeAI@123";
 
 const pad = (n: number) => String(n).padStart(6, "0");
 const YEAR = new Date().getFullYear();
@@ -221,7 +221,7 @@ async function main() {
     ],
   });
 
-  console.log(`Seeded. Log in as admin@serveai.local / ${DEV_PASSWORD}. Change these passwords before any real use.`);
+  console.log(`Seeded. Log in as admin@serveai.local${process.env.SEED_PASSWORD ? " with SEED_PASSWORD" : ` / ${DEV_PASSWORD}`}. Change these passwords before any real use.`);
 }
 
 main()

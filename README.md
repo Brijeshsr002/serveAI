@@ -47,7 +47,7 @@ Using your own PostgreSQL? Point `DATABASE_URL` at it and skip `db:local`.
 
 ### Development accounts
 
-The seed creates these, all with password `ServeAI@123`. **These are public development credentials. Never use them on a real deployment.** The seed refuses to run when `NODE_ENV=production`.
+The seed creates these, all with password `ServeAI@123`, or `SEED_PASSWORD` if set. **The default is a public development credential. Never use it on a real deployment.** The seed refuses to run when `NODE_ENV=production`.
 
 | Role | Email |
 |---|---|
