@@ -1,11 +1,8 @@
 import PDFDocument from "pdfkit";
 import { date, toNumber } from "@/lib/format";
 import type { InvoiceFull } from "@/lib/services/invoices";
-import { INVOICE_BACKGROUND } from "./car-images";
 import { INTER_BOLD, INTER_REGULAR, INTER_RUPEE_BOLD, INTER_RUPEE_REGULAR } from "./fonts";
 
-const BACKGROUND = Buffer.from(INVOICE_BACKGROUND, "base64");
-const ROOFLINE = "M7 20c6 0 8-9 17-9s11 7 17 9";
 
 const figure = (v: unknown) => new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(toNumber(v as number));
 
@@ -61,30 +58,45 @@ export function renderInvoicePdf(invoice: InvoiceFull, paymentStatus: string, ce
     };
 
     // The car sits pale behind the page, on every page, so everything stays readable over it.
-    const drawBackground = () => doc.image(BACKGROUND, 0, 0, { width: 595.28, height: 841.89 });
+    // The ServAI logo, drawn the same way as on the site: "Serv", then the A with its eyes, then the I.
+    const drawLogo = (x: number, y: number, scale: number, ink: string, accent: string) => {
+      doc.save().translate(x, y).scale(scale);
+      doc.fillColor(ink).font("Bold").fontSize(80).text("Serv", 0, 0, { lineBreak: false });
+      const markX = doc.widthOfString("Serv") - 2;
+      doc.translate(markX, 8);
+      doc.path("M6 70 L41 13 L76 70").lineWidth(13).lineJoin("round").stroke(accent);
+      doc.roundedRect(26, 49, 30, 21, 8).fill(accent);
+      doc.roundedRect(33, 55, 6, 9, 3).fill("#FFFFFF");
+      doc.roundedRect(43, 55, 6, 9, 3).fill("#FFFFFF");
+      doc.rect(88, 12, 13, 58).fill(accent);
+      doc.restore();
+    };
+
+    // The logo sits pale behind the page, on every page, so everything stays readable over it.
+    const drawBackground = () => {
+      doc.save().opacity(0.05);
+      drawLogo(45, 350, 1.75, ACCENT, ACCENT);
+      doc.restore();
+    };
     drawBackground();
     doc.on("pageAdded", drawBackground);
 
     // Letterhead
-    doc.save().translate(LEFT, 46).scale(0.9);
-    doc.roundedRect(0, 0, 48, 48, 9).fill(ACCENT);
-    doc.path(ROOFLINE).lineWidth(2.6).lineCap("round").stroke("#FFFFFF");
-    doc.fillColor("#FFFFFF").font("Bold").fontSize(18).text("CS", 0, 21, { width: 48, align: "center", lineBreak: false });
-    doc.restore();
-    doc.fillColor(INK).font("Bold").fontSize(17).text(center.name, LEFT + 54, 46, { width: 240, height: 22, ellipsis: true });
+    drawLogo(LEFT, 46, 0.36, INK, ACCENT);
+    doc.fillColor(INK).font("Bold").fontSize(17).text(center.name, LEFT + 112, 46, { width: 180, height: 22, ellipsis: true });
     // A blank contact field just doesn't show, and the rows close up.
     const contacts: [string[], string][] = [[ICON_PHONE, center.phone], [ICON_MAIL, center.email], [ICON_PIN, center.address]]
       .flatMap(([icon, text]) => (typeof text === "string" && text.trim() ? [[icon, text.trim()] as [string[], string]] : []));
     let contactY = 69;
     for (const [icon, text] of contacts) {
-      doc.save().translate(LEFT + 54, contactY + 1).scale(8 / 24);
+      doc.save().translate(LEFT + 112, contactY + 1).scale(8 / 24);
       icon.forEach((d) => doc.path(d));
       doc.lineWidth(2).lineCap("round").lineJoin("round").strokeColor(ACCENT).stroke();
       doc.restore();
       doc.fillColor(MUTED).font("Regular").fontSize(8.5);
       // Only the address can run to a second line, and it's last, so the rows stay above the rule.
-      const height = Math.min(doc.heightOfString(text, { width: 226 }), 22);
-      doc.text(text, LEFT + 66, contactY, { width: 226, height, ellipsis: true });
+      const height = Math.min(doc.heightOfString(text, { width: 168 }), 22);
+      doc.text(text, LEFT + 124, contactY, { width: 168, height, ellipsis: true });
       contactY += height + 0.5;
     }
 
