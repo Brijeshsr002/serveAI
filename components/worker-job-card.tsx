@@ -68,7 +68,7 @@ export function WorkerJobCard({ job, catalog }: { job: Job; catalog?: { prices: 
         <ul className="space-y-1">
           {job.items.map((i) => (
             <li key={i.id} className="flex items-center justify-between gap-2">
-              <span className="min-w-0 break-words">{i.name}{Number(i.quantity) !== 1 && ` × ${Number(i.quantity)}`}<ApprovalBadge approval={i.approval} /></span>
+              <span className="min-w-0 break-words">{i.name}{Number(i.quantity) !== 1 && `, Qty ${Number(i.quantity)}`}<ApprovalBadge approval={i.approval} /></span>
               <span className="flex shrink-0 items-center gap-1 tabular-nums">
                 {money(i.total as number)}
                 {editable && <WorkItemDialog jobId={job.id} item={toWorkItem(i)} {...catalog} variant="ghost" triggerSize="icon-sm" triggerLabel={`Edit ${i.name}`} trigger={<Pencil className="size-3.5" />} />}

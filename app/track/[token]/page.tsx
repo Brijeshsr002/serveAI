@@ -69,7 +69,7 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
           {view.awaitingApproval.map((item) => (
             <div key={item.ref} className="rounded-lg border bg-card p-3">
               <div className="mb-2 flex justify-between gap-3 text-sm font-medium">
-                <span className="min-w-0 break-words">{item.name}{item.quantity !== "1" && ` × ${item.quantity}`}</span>
+                <span className="min-w-0 break-words">{item.name}{item.quantity !== "1" && `, Qty ${Number(item.quantity)}`}</span>
                 <span className="shrink-0">{money(item.total)}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -114,7 +114,7 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
         {view.items.length > 0 && (
           <ul className="space-y-1 border-b pb-3 text-sm">
             {view.items.map((item, i) => (
-              <li key={i} className="flex justify-between gap-3"><span className="min-w-0 break-words">{item.name}{item.quantity !== "1" && ` × ${item.quantity}`}</span><span className="shrink-0">{money(item.total)}</span></li>
+              <li key={i} className="flex justify-between gap-3"><span className="min-w-0 break-words">{item.name}{item.quantity !== "1" && `, Qty ${Number(item.quantity)}`}</span><span className="shrink-0">{money(item.total)}</span></li>
             ))}
           </ul>
         )}
