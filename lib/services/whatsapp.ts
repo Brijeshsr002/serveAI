@@ -12,6 +12,7 @@ import { sendieeClient, SendieeError } from "@/lib/sendiee";
 import { normalizeSendieeEvent } from "@/lib/sendiee/normalizer";
 import { findOrCreateCustomerByPhone } from "@/lib/services/customers";
 import { createJob } from "@/lib/services/jobs";
+import { isFree } from "@/lib/services/whatsapp-booking";
 import { runCommands } from "@/lib/services/whatsapp-commands";
 import { ACTIVE_STATUSES } from "@/lib/status";
 
@@ -169,6 +170,10 @@ export async function processServiceRequest(input: z.output<typeof intakeSchema>
   if (open) return { job: open, duplicate: true };
 
   const appointmentDate = parseAppointment(input.preferredDate, input.preferredTime);
+  // The list the assistant offered may be old by now, so the time is checked again here.
+  if (appointmentDate && !(await isFree(appointmentDate, await getSettings()))) {
+    throw conflict("SLOT_TAKEN", "That time has just been taken. Check the free slots again and offer another time.");
+  }
   const unparsedPreference =
     !appointmentDate && (input.preferredDate || input.preferredTime)
       ? `Customer's preferred time: ${[input.preferredDate, input.preferredTime].filter(Boolean).join(" ")}`

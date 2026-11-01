@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as webhook } from "@/app/api/webhooks/sendiee/route";
 import { POST as intake } from "@/app/api/webhooks/sendiee/service-request/route";
+import { GET as slots } from "@/app/api/webhooks/sendiee/slots/route";
 import { POST as send } from "@/app/api/whatsapp/send/route";
 import { POST as syncRoute } from "@/app/api/whatsapp/conversations/[customerId]/sync/route";
 import { db } from "@/lib/db";
@@ -193,6 +194,33 @@ describe("Sendiee AI intake", () => {
     expect(job.vehicle.registrationNumber).toBe("TN38AB1234");
     expect(job.appointmentDate?.toISOString()).toBe("2026-11-05T05:00:00.000Z");
     expect(sendieeCalls()).toHaveLength(1);
+  });
+
+  it("gives the assistant the tracking link for the new job", async () => {
+    const { json } = await post(payload);
+    const job = await db.serviceJob.findFirstOrThrow();
+    expect(json.data.trackingUrl).toContain(job.trackingToken);
+  });
+
+  it("refuses a time that is already full", async () => {
+    await post({ ...payload, externalRef: undefined });
+    await post({ ...payload, externalRef: undefined, phone: "9876543211", registrationNumber: "TN 38 AB 1235" });
+    const { status, json } = await post({ ...payload, externalRef: undefined, phone: "9876543212", registrationNumber: "TN 38 AB 1236" });
+    expect(status).toBe(409);
+    expect(json.error.code).toBe("SLOT_TAKEN");
+    expect(await db.serviceJob.count()).toBe(2);
+  });
+
+  it("lists free slots and services behind the secret", async () => {
+    await db.serviceType.create({ data: { name: "Oil Change", kind: "SERVICE", rate: 1500 } });
+    const denied = await call(slots, "GET");
+    expect(denied.status).toBe(401);
+    const { status, json } = await call(slots, "GET", { headers: webhookHeaders });
+    expect(status).toBe(200);
+    expect(json.data.services).toContainEqual({ name: "Oil Change", price: expect.stringContaining("1,500") });
+    expect(json.data.slots.length).toBeGreaterThan(0);
+    expect(json.data.slots[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(json.data.slots[0].time).toMatch(/^\d{2}:\d{2}$/);
   });
 
   it("does not duplicate on redelivery, with or without a reference", async () => {

@@ -40,15 +40,33 @@ export function slotTimes(settings: Pick<Settings, "booking_slot_times" | "booki
   return slots;
 }
 
-const isFree = async (slot: Date, settings: Settings) =>
+export const isFree = async (slot: Date, settings: Settings) =>
   (await db.serviceJob.count({ where: { appointmentDate: slot, status: { not: "CANCELLED" } } })) < (Number(settings.booking_slot_capacity) || 0);
 
-async function offerSlots(customer: Customer, settings: Settings, vehicleId: string, serviceType: string, prefix = "") {
+async function freeSlots(settings: Settings) {
   const free: Date[] = [];
   for (const slot of slotTimes(settings)) {
     if (free.length === MAX_OFFERED) break;
     if (await isFree(slot, settings)) free.push(slot);
   }
+  return free;
+}
+
+/** What the Sendiee AI assistant offers: live free slots, and active services with any approved price. */
+export async function garageAvailability() {
+  const settings = await getSettings();
+  const slots = settings.booking_enabled === "true" ? await freeSlots(settings) : [];
+  const types = await db.serviceType.findMany({ where: { active: true, kind: "SERVICE" }, orderBy: { name: "asc" }, take: 20 });
+  const ist = (options: Intl.DateTimeFormatOptions, slot: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", ...options }).format(slot);
+  return {
+    slots: slots.map((slot) => ({ date: ist({}, slot), time: ist({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, slot), label: dateTime(slot) })),
+    services: types.map((t) => ({ name: t.name, price: t.rate ? rupees(t.rate) : null })),
+    phone: settings.center_phone || null,
+  };
+}
+
+async function offerSlots(customer: Customer, settings: Settings, vehicleId: string, serviceType: string, prefix = "") {
+  const free = await freeSlots(settings);
   if (free.length === 0) {
     await setPending(customer.id, null);
     return `Sorry, we have no free slots right now.${settings.center_phone ? ` Please call us on ${settings.center_phone}.` : " Please reply here and our team will help."}`;
