@@ -12,13 +12,15 @@ export const PASSWORD = "Password123!";
 const HASH = bcrypt.hashSync(PASSWORD, 4);
 
 export type Sent = { url: string; method: string; body: any; headers: Record<string, string> };
-export const fake = { calls: [] as Sent[], fail: null as null | { status: number; code: string }, throws: null as null | Error };
+export const fake = { calls: [] as Sent[], fail: null as null | { status: number; code: string }, throws: null as null | Error, chats: [] as unknown[], extraHistory: [] as unknown[] };
 
 /** Stands in for api.sendiee.com and api.razorpay.com at the network boundary only. */
 export function installFakeApis() {
   fake.calls = [];
   fake.fail = null;
   fake.throws = null;
+  fake.chats = [];
+  fake.extraHistory = [];
   let counter = 0;
   vi.stubGlobal("fetch", async (input: URL | string, init: RequestInit = {}) => {
     const url = String(input);
@@ -41,12 +43,16 @@ export function installFakeApis() {
       return json(200, { success: true, data: { messageId: `wamid.out${counter}`, status: "accepted", recipient: "x" } });
     }
     if (url.includes("/v2.0/contacts")) return json(200, { success: true, data: { _id: "c1", phone: "x", isNew: false } });
+    if (url.includes("/v2.0/chats/conversations")) {
+      return json(200, { success: true, data: fake.chats, pagination: { total: fake.chats.length, page: 1, limit: 50, totalPages: 1, hasMore: false } });
+    }
     if (url.includes("/v2.0/chats/history")) {
       return json(200, {
         success: true,
         data: [
           { messageId: "m1", wamid: "wamid.hist1", direction: "inbound", internal: false, status: "received", type: "text", text: "Hello from history", createdAt: "2026-10-30T05:18:00.000Z" },
           { messageId: "m2", wamid: "wamid.hist2", direction: "outbound", internal: true, status: "sent", type: "text", text: "internal note", createdAt: "2026-10-30T05:19:00.000Z" },
+          ...fake.extraHistory,
         ],
         pagination: { limit: 100, hasMore: false, nextCursor: null },
         contact: { phone: "x", window: { open: true, lastInboundAt: new Date().toISOString(), closesAt: null } },

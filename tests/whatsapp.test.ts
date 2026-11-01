@@ -4,6 +4,9 @@ import { POST as intake } from "@/app/api/webhooks/sendiee/service-request/route
 import { GET as slots } from "@/app/api/webhooks/sendiee/slots/route";
 import { POST as carStatus } from "@/app/api/webhooks/sendiee/status/route";
 import { POST as send } from "@/app/api/whatsapp/send/route";
+import { POST as startChatRoute } from "@/app/api/whatsapp/conversations/route";
+import { POST as inboxSync } from "@/app/api/whatsapp/sync/route";
+import { syncInbox } from "@/lib/services/whatsapp";
 import { POST as syncRoute } from "@/app/api/whatsapp/conversations/[customerId]/sync/route";
 import { db } from "@/lib/db";
 import { NotificationService, loadJobContext } from "@/lib/notifications";
@@ -69,6 +72,55 @@ describe("WhatsApp service", () => {
     const { status } = await call(send, "POST", { cookie, body: { customerId: c.id, text: "Hi" } });
     expect(status).toBe(201);
     expect(sendieeCalls()).toHaveLength(1);
+  });
+
+  const chat = { conversationId: "conv9", phone: "919812345678", contactName: "Kavi", brandNumber: "x", lastMessage: "Hello", lastMessageAt: "2026-10-30T05:18:00.000Z", unreadCount: 40, isArchived: false };
+
+  it("brings new chats in from Sendiee with no webhook, once, and keeps old ones read", async () => {
+    const cookie = await loginCookie((await makeUser("RECEPTIONIST", "Rita")).email);
+    fake.chats = [chat];
+    const first = await call(inboxSync, "POST", { cookie });
+    expect(first.json.data.synced).toBe(1);
+    const customer = await db.customer.findUniqueOrThrow({ where: { phone: "919812345678" }, include: { conversation: true, messages: true } });
+    expect(customer.name).toBe("Kavi");
+    expect(customer.messages).toHaveLength(1);
+    expect(customer.conversation).toMatchObject({ sendieeId: "conv9", unreadCount: 0 });
+    expect(customer.conversation?.lastInboundAt).not.toBeNull();
+
+    const second = await call(inboxSync, "POST", { cookie });
+    expect(second.json.data.synced).toBe(0);
+    expect(await db.whatsappMessage.count()).toBe(1);
+  });
+
+  it("marks a message from today as unread", async () => {
+    const now = new Date().toISOString();
+    fake.chats = [{ ...chat, lastMessageAt: now }];
+    fake.extraHistory = [{ messageId: "m3", wamid: "wamid.new", direction: "inbound", internal: false, status: "received", type: "text", text: "Is my car ready?", createdAt: now }];
+    await syncInbox();
+    const conv = await db.whatsappConversation.findFirstOrThrow();
+    expect(conv).toMatchObject({ unreadCount: 1, lastMessage: "Is my car ready?" });
+  });
+
+  it("moves the ticks of a sent message forward but never back, and doesn't copy it twice", async () => {
+    const c = await makeCustomer();
+    const sent = await db.whatsappMessage.create({ data: { customerId: c.id, direction: "OUTBOUND", content: "Hi", sendieeMessageId: "internal-id", status: "ACCEPTED" } });
+    const history = (status: string) => [{ messageId: "internal-id", wamid: "wamid.real", direction: "outbound", internal: false, status, type: "text", text: "Hi", createdAt: "2026-10-30T05:20:00.000Z" }];
+    fake.extraHistory = history("read");
+    await syncInbox(c.id);
+    expect((await db.whatsappMessage.findUniqueOrThrow({ where: { id: sent.id } })).status).toBe("READ");
+    fake.extraHistory = history("delivered");
+    await syncInbox(c.id);
+    expect((await db.whatsappMessage.findUniqueOrThrow({ where: { id: sent.id } })).status).toBe("READ");
+    expect(await db.whatsappMessage.count({ where: { content: "Hi" } })).toBe(1);
+  });
+
+  it("opens a new chat with a number without sending anything, and refuses a bad one", async () => {
+    const cookie = await loginCookie((await makeUser("RECEPTIONIST", "Rita")).email);
+    const { status, json } = await call(startChatRoute, "POST", { cookie, body: { phone: "98123 45678", name: "Kavi" } });
+    expect(status).toBe(200);
+    expect(await db.whatsappConversation.count({ where: { customerId: json.data.customerId } })).toBe(1);
+    expect(sendieeCalls()).toHaveLength(0);
+    expect((await call(startChatRoute, "POST", { cookie, body: { phone: "12345" } })).status).toBe(400);
   });
 
   it("syncs documented chat history, skipping internal notes, without duplicating", async () => {

@@ -7,7 +7,7 @@ import { db, isUniqueViolation, nextVehicleCode } from "@/lib/db";
 import { ApiError, conflict, notFound } from "@/lib/errors";
 import { loadJobContext, mapSendieeStatus, NotificationService, sendFreeformText, sendTemplateText } from "@/lib/notifications";
 import { normalizePhone, normalizeRegistration } from "@/lib/phone";
-import { sendieeClient, SendieeError } from "@/lib/sendiee";
+import { isSendieeConfigured, sendieeClient, SendieeError } from "@/lib/sendiee";
 import { normalizeSendieeEvent } from "@/lib/sendiee/normalizer";
 import { findOrCreateCustomerByPhone } from "@/lib/services/customers";
 import { createJob } from "@/lib/services/jobs";
@@ -296,41 +296,116 @@ export async function sendStaffMessage(actor: Actor, input: z.output<typeof send
   }
 }
 
+const toApiError = (err: unknown) =>
+  err instanceof SendieeError ? new ApiError(502, err.code, err.code === "NOT_CONFIGURED" ? "WhatsApp is not configured yet" : err.message) : err;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const INBOX_PAGE = 50;
+/** Each tick stays short on serverless; anything left over is picked up by the next one. */
+const CHATS_PER_TICK = 8;
+
 /**
- * Backfills from GET /v2.0/chats/history, the documented read API. This keeps the inbox
- * correct even if a webhook was missed, and also refreshes the 24-hour window.
+ * Copies a chat from GET /v2.0/chats/history, the documented read API. This keeps the inbox
+ * correct with no webhook set up, moves message ticks forward, and only marks recent messages unread.
  */
+async function pullHistory(customerId: string, phone: string, remoteLastAt?: Date) {
+  const history = await sendieeClient.getChatHistory(phone, { limit: 100 });
+  const visible = history.data.filter((m) => !m.internal);
+  const known = await db.whatsappMessage.findMany({
+    where: { customerId, sendieeMessageId: { in: visible.flatMap((m) => [m.wamid, m.messageId].filter((id): id is string => Boolean(id))) } },
+    select: { id: true, sendieeMessageId: true, status: true },
+  });
+  const found = (m: (typeof visible)[number]) => known.find((k) => k.sendieeMessageId === m.wamid || k.sendieeMessageId === m.messageId);
+  const fresh = visible.filter((m) => !found(m));
+  const { count } = await db.whatsappMessage.createMany({
+    data: fresh.map((m) => ({
+      customerId,
+      direction: m.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const),
+      messageType: m.type,
+      content: m.text ?? `[${m.type}]`,
+      sendieeMessageId: m.wamid ?? m.messageId,
+      status: mapSendieeStatus(m.status) ?? (m.direction === "inbound" ? ("RECEIVED" as const) : ("SENT" as const)),
+      createdAt: new Date(m.createdAt),
+    })),
+    skipDuplicates: true,
+  });
+  for (const m of visible) {
+    const local = found(m);
+    const next = mapSendieeStatus(m.status);
+    if (local && next && next !== "FAILED" && ORDER.indexOf(next) > ORDER.indexOf(local.status)) {
+      await db.whatsappMessage.update({ where: { id: local.id }, data: { status: next } });
+    }
+  }
+  const unread = fresh.filter((m) => m.direction === "inbound" && Date.now() - new Date(m.createdAt).getTime() < DAY_MS).length;
+  const newest = await db.whatsappMessage.findFirst({ where: { customerId }, orderBy: { createdAt: "desc" } });
+  const newestAt = newest?.createdAt;
+  const lastInbound = history.contact?.window?.lastInboundAt;
+  const fields = {
+    lastMessage: newest?.content,
+    lastMessageAt: remoteLastAt && (!newestAt || remoteLastAt > newestAt) ? remoteLastAt : newestAt,
+    ...(lastInbound ? { lastInboundAt: new Date(lastInbound) } : {}),
+  };
+  await db.whatsappConversation.upsert({
+    where: { customerId },
+    create: { customerId, ...fields, unreadCount: unread },
+    update: { ...fields, ...(unread ? { unreadCount: { increment: unread } } : {}) },
+  });
+  return { imported: count };
+}
+
 export async function syncConversation(customerId: string) {
   const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer) throw notFound("CUSTOMER_NOT_FOUND", "Customer not found");
   try {
     await sendieeClient.upsertContact({ phone: customer.phone, contactName: customer.name });
-    const history = await sendieeClient.getChatHistory(customer.phone, { limit: 100 });
-    const rows = history.data
-      .filter((m) => !m.internal)
-      .map((m) => ({
-        customerId,
-        direction: m.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const),
-        messageType: m.type,
-        content: m.text ?? `[${m.type}]`,
-        sendieeMessageId: m.wamid ?? m.messageId,
-        status: mapSendieeStatus(m.status) ?? (m.direction === "inbound" ? ("RECEIVED" as const) : ("SENT" as const)),
-        createdAt: new Date(m.createdAt),
-      }));
-    const { count } = await db.whatsappMessage.createMany({ data: rows, skipDuplicates: true });
-    const newest = await db.whatsappMessage.findFirst({ where: { customerId }, orderBy: { createdAt: "desc" } });
-    const lastInbound = history.contact?.window?.lastInboundAt;
-    const fields = {
-      lastMessage: newest?.content,
-      lastMessageAt: newest?.createdAt,
-      ...(lastInbound ? { lastInboundAt: new Date(lastInbound) } : {}),
-    };
-    await db.whatsappConversation.upsert({ where: { customerId }, create: { customerId, ...fields }, update: fields });
-    return { imported: count };
+    return await pullHistory(customerId, customer.phone);
   } catch (err) {
-    if (err instanceof SendieeError) {
-      throw new ApiError(502, err.code, err.code === "NOT_CONFIGURED" ? "WhatsApp is not configured yet" : err.message);
-    }
-    throw err;
+    throw toApiError(err);
   }
+}
+
+/** One tick of the live inbox: brings in chats that changed in Sendiee, plus the chat on screen for its ticks. */
+export async function syncInbox(openCustomerId?: string | null) {
+  if (!isSendieeConfigured()) return { synced: 0 };
+  try {
+    const chats = await sendieeClient.listConversations({ limit: INBOX_PAGE });
+    let synced = 0;
+    for (const chat of chats) {
+      if (synced === CHATS_PER_TICK) break;
+      const phone = normalizePhone(chat.phone);
+      if (!phone || !chat.lastMessageAt || chat.isArchived) continue;
+      const remoteAt = new Date(chat.lastMessageAt);
+      const known = await db.customer.findUnique({ where: { phone }, include: { conversation: true } });
+      const seenAt = known?.conversation?.lastMessageAt;
+      if (seenAt && seenAt >= remoteAt) continue;
+      const customer = known ?? (await findOrCreateCustomerByPhone(phone, chat.contactName));
+      await pullHistory(customer.id, phone, remoteAt);
+      await db.whatsappConversation.update({ where: { customerId: customer.id }, data: { sendieeId: chat.conversationId } });
+      synced++;
+    }
+    const open = openCustomerId ? await db.customer.findUnique({ where: { id: openCustomerId } }) : null;
+    // A number that has never chatted isn't known to Sendiee yet, which is fine for a new chat.
+    if (open) {
+      await pullHistory(open.id, open.phone).catch((err) => {
+        if (!(err instanceof SendieeError && err.code === "CONTACT_NOT_FOUND")) throw err;
+      });
+    }
+    return { synced };
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export const newChatSchema = z.object({
+  phone: z.string().trim().min(5).max(20),
+  name: z.string().trim().max(120).optional(),
+});
+
+/** Opens a chat with a number, adding the customer if they're new. Nothing is sent until staff type a message. */
+export async function startChat(input: z.output<typeof newChatSchema>) {
+  const phone = normalizePhone(input.phone);
+  if (!phone) throw new ApiError(400, "INVALID_PHONE", "Enter a valid phone number");
+  const customer = await findOrCreateCustomerByPhone(phone, input.name || null);
+  await db.whatsappConversation.upsert({ where: { customerId: customer.id }, create: { customerId: customer.id }, update: {} });
+  return { customerId: customer.id };
 }

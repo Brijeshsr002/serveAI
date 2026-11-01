@@ -1,24 +1,34 @@
 "use client";
 
+import { SendHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client";
 import { liveRefreshPaused } from "@/lib/live-refresh";
 import type { ComposerTemplates } from "@/lib/services/whatsapp-templates";
 
-/** New inbound messages arrive by webhook; re-render the server component to pick them up. */
-export function InboxAutoRefresh() {
+const LIVE_MS = 8_000;
+
+/** Brings in what's new from Sendiee, then re-renders the server component to show it. */
+export function InboxAutoRefresh({ customerId }: { customerId?: string }) {
   const router = useRouter();
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (!liveRefreshPaused(document)) router.refresh();
-    }, 15_000);
+    let running = false;
+    async function tick() {
+      if (running || document.hidden || liveRefreshPaused(document)) return;
+      running = true;
+      // A missed tick is harmless; the next one catches up.
+      await api(`/api/whatsapp/sync${customerId ? `?c=${encodeURIComponent(customerId)}` : ""}`, { method: "POST" }).catch(() => {});
+      running = false;
+      router.refresh();
+    }
+    void tick();
+    const timer = setInterval(() => void tick(), LIVE_MS);
     return () => clearInterval(timer);
-  }, [router]);
+  }, [router, customerId]);
   return null;
 }
 
@@ -67,17 +77,17 @@ export function Composer({ customerId, serviceJobId }: { customerId: string; ser
     }
   }
 
-  function send(e: React.FormEvent) {
+  function send(e: React.FormEvent | React.KeyboardEvent) {
     e.preventDefault();
-    if (!text.trim() || unfilled.test(text)) return;
+    if (busy || !text.trim() || unfilled.test(text)) return;
     void deliver({ text }, () => setText(""));
   }
 
   const blanks = unfilled.test(text);
   return (
-    <div className="border-t">
+    <div className="bg-[#f0f2f5] dark:bg-[#202c33]">
       {picker && (
-        <div className="max-h-72 space-y-3 overflow-y-auto border-b bg-muted/40 p-3 text-sm">
+        <div className="max-h-56 space-y-3 overflow-y-auto border-b p-3 text-sm">
           {loadError && <p role="alert" className="text-destructive">{loadError}</p>}
           {!templates && !loadError && <p className="text-muted-foreground">Loading messages…</p>}
           {templates && (
@@ -89,13 +99,13 @@ export function Composer({ customerId, serviceJobId }: { customerId: string; ser
           )}
         </div>
       )}
-      <form onSubmit={send} className="flex items-end gap-2 p-3">
-        <Button type="button" variant="outline" onClick={togglePicker} aria-expanded={picker}>Messages</Button>
+      <form onSubmit={send} className="flex items-end gap-2 px-3 py-2">
+        <Button type="button" variant="ghost" onClick={togglePicker} aria-expanded={picker}>Messages</Button>
         <div className="min-w-0 flex-1">
-          <Textarea aria-label="Message" rows={1} className="min-h-9" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message" />
+          <Textarea aria-label="Message" rows={1} className="min-h-9 rounded-lg border-0 bg-white shadow-none dark:bg-[#2a3942]" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) send(e); }} placeholder="Type a message" />
           {blanks && <p className="mt-1 text-xs text-destructive">Replace the {"{{…}}"} parts before sending.</p>}
         </div>
-        <Button type="submit" disabled={busy || !text.trim() || blanks}>Send</Button>
+        <Button type="submit" aria-label="Send" className="bg-[#00a884] text-white hover:bg-[#029273]" disabled={busy || !text.trim() || blanks}><SendHorizontal className="size-4" /></Button>
       </form>
     </div>
   );

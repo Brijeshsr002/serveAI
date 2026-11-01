@@ -7,7 +7,6 @@ import type { StepKey } from "@/lib/message-steps";
 import { appUrl, fill, getSettings, statusMessageKey, trackingUrl } from "@/lib/settings";
 import { STATUS_LABEL } from "@/lib/status";
 
-const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type JobContext = {
   id: string;
@@ -21,11 +20,6 @@ const JOB_INCLUDE = { customer: true, vehicle: true } as const;
 
 export const loadJobContext = (id: string) =>
   db.serviceJob.findUniqueOrThrow({ where: { id }, include: JOB_INCLUDE });
-
-export async function isWindowOpen(customerId: string) {
-  const conversation = await db.whatsappConversation.findUnique({ where: { customerId } });
-  return Boolean(conversation?.lastInboundAt && Date.now() - conversation.lastInboundAt.getTime() < WINDOW_MS);
-}
 
 export function mapSendieeStatus(status: string | null | undefined): MessageStatus | null {
   const map: Record<string, MessageStatus> = {
