@@ -6,6 +6,8 @@ import { POST as carStatus } from "@/app/api/webhooks/sendiee/status/route";
 import { POST as send } from "@/app/api/whatsapp/send/route";
 import { POST as startChatRoute } from "@/app/api/whatsapp/conversations/route";
 import { POST as inboxSync } from "@/app/api/whatsapp/sync/route";
+import { generateInvoice } from "@/lib/services/invoices";
+import { updateJob } from "@/lib/services/jobs";
 import { syncInbox } from "@/lib/services/whatsapp";
 import { POST as syncRoute } from "@/app/api/whatsapp/conversations/[customerId]/sync/route";
 import { db } from "@/lib/db";
@@ -211,6 +213,43 @@ describe("Sendiee webhook", () => {
     expect(nested).toMatchObject({ kind: "message", phone: "919000000002", text: "Yo", name: "N" });
     const sent = normalizeSendieeEvent({ event: "whatsapp.message_sent", data: { to: "919000000003", text: "From AI", wamid: "w2" } });
     expect(sent).toMatchObject({ kind: "message", direction: "OUTBOUND", phone: "919000000003" });
+  });
+});
+
+describe("the booked service on the bill", () => {
+  const book = async (serviceType: string, rate: number | null) => {
+    if (rate !== null) await db.serviceType.create({ data: { name: serviceType, kind: "SERVICE", rate } });
+    const { json } = await call(intake, "POST", {
+      raw: JSON.stringify({ phone: "9876543210", name: "Asha", brand: "Tata", model: "Nexon", registrationNumber: "TN38CY5269", serviceType }),
+      headers: webhookHeaders,
+    });
+    return db.serviceJob.findFirstOrThrow({ where: { serviceNumber: json.data.serviceNumber } });
+  };
+
+  it("bills the priced service, and a part adds to it instead of replacing it", async () => {
+    const job = await book("Ceramic Coating", 15000);
+    await db.serviceItem.create({ data: { serviceJobId: job.id, itemType: "PART", name: "Oil Filter", unitPrice: 300, total: 300 } });
+    const invoice = await generateInvoice(SYSTEM_ACTOR, job.id);
+    expect(Number(invoice.total)).toBe(15300);
+    const lines = await db.invoiceItem.findMany({ where: { invoiceId: invoice.id } });
+    expect(lines.map((l) => l.name).sort()).toEqual(["Ceramic Coating", "Oil Filter"]);
+  });
+
+  it("adds no line for a service with no set price", async () => {
+    const job = await book("Custom Work", null);
+    expect(await db.serviceItem.count({ where: { serviceJobId: job.id } })).toBe(0);
+  });
+
+  it("moves the line when staff change the service or its price, and keeps a paid bill", async () => {
+    const job = await book("Ceramic Coating", 15000);
+    await db.serviceType.create({ data: { name: "Oil Change", kind: "SERVICE", rate: 1500 } });
+    await updateJob(SYSTEM_ACTOR, job.id, { serviceType: "Oil Change", estimatedAmount: 1500 });
+    const line = await db.serviceItem.findFirstOrThrow({ where: { serviceJobId: job.id } });
+    expect(line).toMatchObject({ name: "Oil Change" });
+    expect(Number(line.total)).toBe(1500);
+    await updateJob(SYSTEM_ACTOR, job.id, { estimatedAmount: 1800 });
+    expect(Number((await db.serviceItem.findFirstOrThrow({ where: { serviceJobId: job.id } })).total)).toBe(1800);
+    expect(await db.serviceItem.count({ where: { serviceJobId: job.id } })).toBe(1);
   });
 });
 

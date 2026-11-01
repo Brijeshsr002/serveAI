@@ -6,10 +6,10 @@ import type { Actor } from "@/lib/api/route";
 import type { SessionUser } from "@/lib/auth/session";
 import { db, lockUserRow, nextServiceNumber, type Tx } from "@/lib/db";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "@/lib/errors";
-import { dateToDayKey, dayKeyToDate, istDayKey } from "@/lib/format";
+import { dateToDayKey, dayKeyToDate, istDayKey, toNumber } from "@/lib/format";
 import { loadJobContext, NotificationService } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
-import { generateInvoiceIfNeeded } from "@/lib/services/invoices";
+import { generateInvoiceIfNeeded, syncBill } from "@/lib/services/invoices";
 import { defaultRate } from "@/lib/services/service-rates";
 import { ACTIVE_STATUSES, boardTargets, isTerminal, STATUS_LABEL, TRANSITIONS } from "@/lib/status";
 
@@ -55,6 +55,16 @@ export const statusSchema = z.object({
 
 type JobCreate = z.output<typeof jobSchema>;
 
+const serviceLine = (serviceJobId: string, name: string, price: number) => ({
+  serviceJobId,
+  itemType: "LABOUR" as const,
+  name,
+  quantity: 1,
+  unitPrice: price,
+  total: price,
+  approval: "APPROVED" as const,
+});
+
 export async function createJob(actor: Actor, input: JobCreate, externalRef?: string, notifyCustomer = false) {
   const vehicle = await db.vehicle.findUnique({ where: { id: input.vehicleId } });
   if (!vehicle || vehicle.customerId !== input.customerId) {
@@ -62,7 +72,8 @@ export async function createJob(actor: Actor, input: JobCreate, externalRef?: st
   }
   const { assignedWorkerId, ...fields } = input;
   // An enquiry with no quote starts from the service's default price.
-  const estimatedAmount = fields.estimatedAmount ?? (await defaultRate(fields.serviceType));
+  const rate = await defaultRate(fields.serviceType);
+  const estimatedAmount = fields.estimatedAmount ?? rate;
 
   const job = await db.$transaction(async (tx) => {
     const created = await tx.serviceJob.create({
@@ -76,6 +87,8 @@ export async function createJob(actor: Actor, input: JobCreate, externalRef?: st
         status: "NEW",
       },
     });
+    // A service with a set price is on the bill from the start. Without this, the first part added would become the whole bill.
+    if (rate && estimatedAmount) await tx.serviceItem.create({ data: serviceLine(created.id, fields.serviceType, toNumber(estimatedAmount)) });
     await tx.serviceStatusHistory.create({
       data: {
         serviceJobId: created.id,
@@ -104,8 +117,30 @@ export async function createJob(actor: Actor, input: JobCreate, externalRef?: st
   return (await autoAssignNewJob(job)) ?? job;
 }
 
+/** Moves the job's service line along when staff change the service or its price. A paid bill stays as it is. */
+async function syncServiceLine(actor: Actor, before: { id: string; serviceType: string; estimatedAmount: unknown }, after: { serviceType: string; estimatedAmount: unknown }) {
+  if (before.serviceType === after.serviceType && toNumber(before.estimatedAmount as never) === toNumber(after.estimatedAmount as never)) return;
+  const paid = await db.payment.findFirst({ where: { serviceJobId: before.id, status: "PAID" } });
+  if (paid) return;
+  const line = await db.serviceItem.findFirst({ where: { serviceJobId: before.id, name: before.serviceType, approval: "APPROVED" } });
+  const rate = await defaultRate(after.serviceType);
+  const price = toNumber((after.estimatedAmount ?? rate) as never);
+  // An unpriced service is billed from the items staff add, so it starts no line of its own.
+  if (!rate && !line) return;
+  if (!price || !rate) {
+    if (line) await db.serviceItem.delete({ where: { id: line.id } });
+  } else if (line) {
+    await db.serviceItem.update({ where: { id: line.id }, data: { name: after.serviceType, unitPrice: price, total: toNumber(line.tax) + price * toNumber(line.quantity) - toNumber(line.discount) } });
+  } else {
+    await db.serviceItem.create({ data: serviceLine(before.id, after.serviceType, price) });
+  }
+  await syncBill(actor, before.id);
+}
+
 export async function updateJob(actor: Actor, id: string, input: z.output<typeof jobPatchSchema>) {
+  const before = await db.serviceJob.findUnique({ where: { id } });
   const job = await db.serviceJob.update({ where: { id }, data: input });
+  if (before) await syncServiceLine(actor, before, job);
   await logActivity(actor, {
     action: "SERVICE_UPDATED",
     entityType: "ServiceJob",
