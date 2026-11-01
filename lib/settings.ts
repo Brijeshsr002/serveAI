@@ -1,6 +1,7 @@
 import type { ServiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { MESSAGE_STEPS, type StepKey } from "@/lib/message-steps";
+import { DEFAULT_PRICE_LIST } from "@/lib/work-catalog";
 
 export { fill } from "@/lib/message-steps";
 
@@ -15,6 +16,7 @@ const BASE_DEFAULTS = {
   template_payment_confirmation: "serveai_payment_received",
   template_invoice: "serveai_invoice",
   template_language: "en",
+  price_list: DEFAULT_PRICE_LIST,
   booking_enabled: "true",
   booking_slot_times: "10:00, 12:00, 15:00, 17:00",
   booking_slot_capacity: "2",

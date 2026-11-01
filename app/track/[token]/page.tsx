@@ -62,6 +62,25 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
         </div>
       </LiveScene>
 
+      {view.awaitingApproval.length > 0 && (
+        <section className="space-y-3 rounded-xl border-2 border-primary bg-accent/40 p-4">
+          <h2 className="font-semibold">We need your OK</h2>
+          <p className="text-sm text-muted-foreground">We found extra work on your car. It's only added to your bill if you approve it.</p>
+          {view.awaitingApproval.map((item) => (
+            <div key={item.ref} className="rounded-lg border bg-card p-3">
+              <div className="mb-2 flex justify-between gap-3 text-sm font-medium">
+                <span className="min-w-0 break-words">{item.name}{item.quantity !== "1" && ` × ${item.quantity}`}</span>
+                <span className="shrink-0">{money(item.total)}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ActionButton label="Yes, add it" size="lg" endpoint={`/api/track/${token}/approval`} body={{ ref: item.ref, approve: true }} success="Added to your bill" />
+                <ActionButton label="No, skip it" size="lg" variant="outline" endpoint={`/api/track/${token}/approval`} body={{ ref: item.ref, approve: false }} success="Skipped" />
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
       <section className="rounded-xl border p-4">
         <h2 className="mb-3 font-medium">Progress</h2>
         {view.status === "CANCELLED" ? (

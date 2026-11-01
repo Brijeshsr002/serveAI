@@ -7,8 +7,9 @@ import type { SessionUser } from "@/lib/auth/session";
 import { db, nextServiceNumber } from "@/lib/db";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import { loadJobContext, NotificationService } from "@/lib/notifications";
+import { PaymentService } from "@/lib/payments";
 import { generateInvoiceIfNeeded } from "@/lib/services/invoices";
-import { ACTIVE_STATUSES, isTerminal, STATUS_LABEL, TRANSITIONS } from "@/lib/status";
+import { ACTIVE_STATUSES, boardTargets, isTerminal, STATUS_LABEL, TRANSITIONS } from "@/lib/status";
 
 export const newTrackingToken = () => randomBytes(32).toString("hex");
 
@@ -176,19 +177,12 @@ export function assertStatusChangeAllowed(
     return;
   }
 
-  if (user.role === "RECEPTIONIST") {
-    if (override) throw forbidden("Only an admin can override status rules");
-    if (next !== "CANCELLED") throw forbidden("Status is updated by the assigned worker");
-    if (isTerminal(job.status)) throw invalidTransition(job.status, next);
-    return;
-  }
-
   if (override) {
+    if (user.role !== "ADMIN") throw forbidden("Only an admin can override status rules");
     if (!notes?.trim()) throw badRequest("OVERRIDE_REASON_REQUIRED", "Give a reason for the override");
     return;
   }
-  const allowed = next === "CANCELLED" ? !isTerminal(job.status) : next !== "ASSIGNED" && TRANSITIONS[job.status].includes(next);
-  if (!allowed) throw invalidTransition(job.status, next);
+  if (!boardTargets(job.status).includes(next)) throw invalidTransition(job.status, next);
 }
 
 const invalidTransition = (from: ServiceStatus, to: ServiceStatus) =>
@@ -211,7 +205,7 @@ export async function changeStatus(
     // Matching on the old status makes two simultaneous clicks produce one change, not two.
     const { count } = await tx.serviceJob.updateMany({
       where: { id: jobId, status: job.status },
-      data: { status: next, actualCompletion: next === "COMPLETED" ? new Date() : undefined },
+      data: { status: next, actualCompletion: next === "COMPLETED" ? new Date() : null },
     });
     if (count === 0) throw conflict("STATUS_CONFLICT", "This job was just updated by someone else. Refresh and retry.");
     await tx.serviceStatusHistory.create({
@@ -237,6 +231,13 @@ export async function changeStatus(
       tx,
     );
   });
+
+  // A closed job can't take new work, and a cancelled one can't be paid for.
+  if (isTerminal(next)) await db.serviceItem.updateMany({ where: { serviceJobId: jobId, approval: "PENDING" }, data: { approval: "DECLINED" } });
+  if (next === "CANCELLED") {
+    const open = await db.payment.findFirst({ where: { serviceJobId: jobId, status: { in: ["PENDING", "PROCESSING"] } } });
+    if (open) await PaymentService.cancelOpenPayment(open.id, open.paymentProvider, open.paymentOrderId);
+  }
 
   let finalAmount: Prisma.Decimal | null = null;
   if (next === "READY_FOR_DELIVERY" || next === "COMPLETED") {
@@ -266,6 +267,15 @@ export async function getJobForUser(user: Pick<SessionUser, "id" | "role">, id: 
   });
   if (!job) throw notFound("SERVICE_NOT_FOUND", "Service job not found");
   return job;
+}
+
+/**
+ * What a worker's job API responses may hold. The tracking token is the customer's own key to
+ * approve work and pay, so it and payment links stay with staff.
+ */
+export function hideFromWorker<T extends { trackingToken: string; payments?: { paymentLink: string | null }[] }>(job: T) {
+  const { trackingToken: _hidden, ...rest } = job;
+  return { ...rest, ...(job.payments ? { payments: job.payments.map((p) => ({ ...p, paymentLink: null })) } : {}) };
 }
 
 /** Workers with their current load, for the assign dropdown. */

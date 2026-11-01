@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as addItem } from "@/app/api/service-jobs/[id]/items/route";
 import { DELETE as removeItem, PATCH as editItem } from "@/app/api/service-jobs/[id]/items/[itemId]/route";
-import { POST as createJob } from "@/app/api/service-jobs/route";
+import { POST as staffApproval } from "@/app/api/service-jobs/[id]/items/[itemId]/approval/route";
+import { POST as setStatus } from "@/app/api/service-jobs/[id]/status/route";
+import { GET as getJob } from "@/app/api/service-jobs/[id]/route";
+import { GET as listJobs, POST as createJob } from "@/app/api/service-jobs/route";
+import { POST as trackApproval } from "@/app/api/track/[token]/approval/route";
+import { publicTrackingView } from "@/lib/services/tracking";
+import { approvalReply } from "@/lib/services/whatsapp-commands";
 import { PATCH as saveSettings } from "@/app/api/settings/route";
 import { db } from "@/lib/db";
 import { renderInvoicePdf } from "@/lib/invoices/pdf";
-import { generateInvoice, invoiceInclude } from "@/lib/services/invoices";
+import { decideItems, generateInvoice, invoiceInclude } from "@/lib/services/invoices";
 import { replyForMessage } from "@/lib/services/whatsapp-commands";
 import { slotTimes } from "@/lib/services/whatsapp-booking";
 import { matchVoiceStatus } from "@/lib/status";
+import { DEFAULT_PRICE_LIST, parsePriceList } from "@/lib/work-catalog";
 import { SYSTEM_ACTOR } from "@/lib/activity";
 import { call, fake, loginCookie, makeCustomer, makeJob, makeUser, makeVehicle, openWindow, sendieeCalls } from "./helpers";
 
@@ -73,11 +80,14 @@ describe("worker adds parts and extra work", () => {
     expect((await call(addItem, "POST", { cookie: worker, params: { id: job.id }, body: part })).json.error.code).toBe("SERVICE_CLOSED");
   });
 
-  it("keeps an existing invoice up to date", async () => {
+  it("keeps extra work off the invoice until it is approved", async () => {
     const job = await assignedJob();
-    await call(addItem, "POST", { cookie: worker, params: { id: job.id }, body: part });
+    const first = await call(addItem, "POST", { cookie: worker, params: { id: job.id }, body: part });
+    await decideItems(SYSTEM_ACTOR, job.id, [first.json.data.id], true);
     await generateInvoice(SYSTEM_ACTOR, job.id);
-    await call(addItem, "POST", { cookie: worker, params: { id: job.id }, body: { ...part, name: "Car Wash", quantity: "1", unitPrice: "200" } });
+    const extra = await call(addItem, "POST", { cookie: worker, params: { id: job.id }, body: { ...part, name: "Car Wash", quantity: "1", unitPrice: "200" } });
+    expect(Number((await db.invoice.findUniqueOrThrow({ where: { serviceJobId: job.id } })).total)).toBe(1800);
+    await decideItems(SYSTEM_ACTOR, job.id, [extra.json.data.id], true);
     expect(Number((await db.invoice.findUniqueOrThrow({ where: { serviceJobId: job.id } })).total)).toBe(2000);
   });
 });
@@ -202,5 +212,194 @@ describe("WhatsApp slot booking", () => {
     const vehicle = await db.vehicle.findFirstOrThrow({ where: { customerId: customer.id } });
     await db.serviceJob.create({ data: { customerId: customer.id, vehicleId: vehicle.id, serviceType: "Oil Change", serviceNumber: "SRV-Y", trackingToken: "y".repeat(64) } });
     expect((await replyForMessage(customer, "book"))?.reply).toContain("already booked in");
+  });
+});
+
+describe("customer approval of extra work", () => {
+  async function waitingItem() {
+    const w = await makeUser("WORKER", "Raj");
+    const worker = await loginCookie(w.email);
+    const { job, customer } = await makeJob();
+    await db.serviceJob.update({ where: { id: job.id }, data: { assignedWorkerId: w.id, status: "SERVICE_IN_PROGRESS" } });
+    await openWindow(customer.id);
+    const { json } = await call(addItem, "POST", { cookie: worker, params: { id: job.id }, body: part });
+    return { job, customer, worker, itemId: json.data.id as string };
+  }
+
+  it("asks the customer and keeps the line off the bill until yes", async () => {
+    const { job, itemId } = await waitingItem();
+    expect(JSON.stringify(sendieeCalls()[0].body)).toContain("Reply YES");
+    expect((await db.serviceItem.findUniqueOrThrow({ where: { id: itemId } })).approval).toBe("PENDING");
+    expect((await generateInvoiceOrNull(job.id))).toBeNull();
+  });
+
+  it("a YES on WhatsApp adds it, once", async () => {
+    const { customer, itemId } = await waitingItem();
+    expect((await approvalReply(customer, " Yes! "))?.reply).toContain("Brake Pads");
+    expect((await db.serviceItem.findUniqueOrThrow({ where: { id: itemId } })).approval).toBe("APPROVED");
+    expect(await approvalReply(customer, "yes")).toBeNull();
+  });
+
+  it("a NO on WhatsApp declines it, and ordinary chat is left alone", async () => {
+    const { customer, itemId } = await waitingItem();
+    expect(await approvalReply(customer, "yes I will come at 5")).toBeNull();
+    expect((await approvalReply(customer, "no"))?.reply).toContain("Brake Pads");
+    expect((await db.serviceItem.findUniqueOrThrow({ where: { id: itemId } })).approval).toBe("DECLINED");
+  });
+
+  it("the tracking page shows it and can approve it, without exposing the id", async () => {
+    const { job, itemId } = await waitingItem();
+    const { trackingToken } = await db.serviceJob.findUniqueOrThrow({ where: { id: job.id } });
+    const view = await publicTrackingView(trackingToken);
+    expect(view.items).toHaveLength(0);
+    expect(view.billSoFar).toBe("0");
+    expect(JSON.stringify(view)).not.toContain(itemId);
+    const params = { token: trackingToken };
+    expect((await call(trackApproval, "POST", { params, body: { ref: "nope", approve: true } })).status).toBe(409);
+    expect((await db.serviceItem.findUniqueOrThrow({ where: { id: itemId } })).approval).toBe("PENDING");
+    expect((await call(trackApproval, "POST", { params, body: { ref: view.awaitingApproval[0].ref, approve: true } })).status).toBe(200);
+    expect((await publicTrackingView(trackingToken)).billSoFar).toBe("1800");
+  });
+
+  it("a worker changing the price needs a fresh yes", async () => {
+    const { job, worker, itemId } = await waitingItem();
+    await decideItems(SYSTEM_ACTOR, job.id, [itemId], true);
+    await call(editItem, "PATCH", { cookie: worker, params: { id: job.id, itemId }, body: { ...part, unitPrice: "1000" } });
+    expect((await db.serviceItem.findUniqueOrThrow({ where: { id: itemId } })).approval).toBe("PENDING");
+  });
+
+  it("staff can record a yes, a worker can't", async () => {
+    const { job, worker, itemId } = await waitingItem();
+    const admin = await loginCookie((await makeUser("ADMIN", "Admin")).email);
+    const params = { id: job.id, itemId };
+    expect((await call(staffApproval, "POST", { cookie: worker, params, body: { approve: true } })).status).toBe(403);
+    expect((await call(staffApproval, "POST", { cookie: admin, params, body: { approve: true } })).status).toBe(200);
+    expect((await db.serviceItem.findUniqueOrThrow({ where: { id: itemId } })).approval).toBe("APPROVED");
+  });
+
+  const generateInvoiceOrNull = (jobId: string) => generateInvoice(SYSTEM_ACTOR, jobId).catch(() => null);
+});
+
+describe("keeping bills honest", () => {
+  async function setup() {
+    const w = await makeUser("WORKER", "Raj");
+    const worker = await loginCookie(w.email);
+    const admin = await loginCookie((await makeUser("ADMIN", "Admin")).email);
+    const { job, customer } = await makeJob();
+    await db.serviceJob.update({ where: { id: job.id }, data: { assignedWorkerId: w.id, status: "SERVICE_IN_PROGRESS" } });
+    await openWindow(customer.id);
+    const add = async (name: string, cookie = worker) => (await call(addItem, "POST", { cookie, params: { id: job.id }, body: { ...part, name } })).json.data.id as string;
+    return { job, customer, worker, admin, add };
+  }
+  const fresh = (id: string) => db.serviceItem.findUniqueOrThrow({ where: { id } });
+
+  it("ignores a casual ok", async () => {
+    const { customer, add } = await setup();
+    const id = await add("Clutch");
+    expect(await approvalReply(customer, "ok")).toBeNull();
+    expect(await approvalReply(customer, "y")).toBeNull();
+    expect((await fresh(id)).approval).toBe("PENDING");
+  });
+
+  it("ignores a yes when the question never reached the customer", async () => {
+    const { customer, add } = await setup();
+    fake.fail = { status: 500, code: "DOWN" };
+    const id = await add("Clutch");
+    fake.fail = null;
+    expect(await approvalReply(customer, "yes")).toBeNull();
+    expect((await fresh(id)).approval).toBe("PENDING");
+  });
+
+  it("asks the customer to choose when several lines wait", async () => {
+    const { customer, add } = await setup();
+    const a = await add("Clutch");
+    const b = await add("Battery");
+    const reply = await approvalReply(customer, "yes");
+    expect(reply?.reply).toContain("2 items");
+    expect((await fresh(a)).approval).toBe("PENDING");
+    expect((await fresh(b)).approval).toBe("PENDING");
+  });
+
+  it("rejects a yes for a price that has since changed", async () => {
+    const { job, worker, add } = await setup();
+    const id = await add("Clutch");
+    const { trackingToken } = await db.serviceJob.findUniqueOrThrow({ where: { id: job.id } });
+    const { ref } = (await publicTrackingView(trackingToken)).awaitingApproval[0];
+    await call(editItem, "PATCH", { cookie: worker, params: { id: job.id, itemId: id }, body: { ...part, name: "Clutch", unitPrice: "5000" } });
+    expect((await call(trackApproval, "POST", { params: { token: trackingToken }, body: { ref, approve: true } })).status).toBe(409);
+    expect((await fresh(id)).approval).toBe("PENDING");
+  });
+
+  it("removes the invoice when its only line goes back to waiting and is declined", async () => {
+    const { job, worker, add } = await setup();
+    const id = await add("Clutch");
+    await decideItems(SYSTEM_ACTOR, job.id, [id], true);
+    await generateInvoice(SYSTEM_ACTOR, job.id);
+    await call(editItem, "PATCH", { cookie: worker, params: { id: job.id, itemId: id }, body: { ...part, name: "Clutch", unitPrice: "1000" } });
+    expect(await db.invoice.findUnique({ where: { serviceJobId: job.id } })).toBeNull();
+    expect((await db.serviceJob.findUniqueOrThrow({ where: { id: job.id } })).finalAmount).toBeNull();
+    await decideItems(SYSTEM_ACTOR, job.id, [id], false);
+    expect(await db.invoice.findUnique({ where: { serviceJobId: job.id } })).toBeNull();
+  });
+
+  it("cancels a payment link once approval changes the amount", async () => {
+    const { job, customer, admin, add } = await setup();
+    const first = await add("Clutch");
+    await decideItems(SYSTEM_ACTOR, job.id, [first], true);
+    const second = await add("Battery");
+    await generateInvoice(SYSTEM_ACTOR, job.id);
+    const link = await db.payment.create({ data: { serviceJobId: job.id, customerId: customer.id, amount: 1800, paymentProvider: "seed", status: "PENDING" } });
+    await decideItems(SYSTEM_ACTOR, job.id, [second], true);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: link.id } })).status).toBe("CANCELLED");
+    expect(Number((await db.invoice.findUniqueOrThrow({ where: { serviceJobId: job.id } })).total)).toBe(3600);
+    expect(admin).toBeTruthy();
+  });
+
+  it("creates the invoice when approval comes after the car is ready", async () => {
+    const { job, add } = await setup();
+    const id = await add("Clutch");
+    await db.serviceJob.update({ where: { id: job.id }, data: { status: "READY_FOR_DELIVERY" } });
+    await decideItems(SYSTEM_ACTOR, job.id, [id], true);
+    expect(Number((await db.invoice.findUniqueOrThrow({ where: { serviceJobId: job.id } })).total)).toBe(1800);
+  });
+
+  it("closing a job declines waiting work, cancels its link, and blocks late answers", async () => {
+    const { job, customer, admin, add } = await setup();
+    const id = await add("Clutch");
+    const link = await db.payment.create({ data: { serviceJobId: job.id, customerId: customer.id, amount: 100, paymentProvider: "seed", status: "PENDING" } });
+    expect((await call(setStatus, "POST", { cookie: admin, params: { id: job.id }, body: { status: "CANCELLED" } })).status).toBe(200);
+    expect((await fresh(id)).approval).toBe("DECLINED");
+    expect((await db.payment.findUniqueOrThrow({ where: { id: link.id } })).status).toBe("CANCELLED");
+    const { trackingToken } = await db.serviceJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect((await publicTrackingView(trackingToken)).awaitingApproval).toHaveLength(0);
+    await expect(decideItems(SYSTEM_ACTOR, job.id, [id], true)).rejects.toThrow("closed");
+  });
+
+  it("never gives a worker the customer's tracking token", async () => {
+    const { job, worker } = await setup();
+    const one = await call(getJob, "GET", { cookie: worker, params: { id: job.id } });
+    expect(one.status).toBe(200);
+    expect(JSON.stringify(one.json)).not.toContain("trackingToken");
+    const list = await call(listJobs, "GET", { cookie: worker });
+    expect(JSON.stringify(list.json)).not.toContain("trackingToken");
+  });
+
+  it("keeps a staff description when a worker edits the line", async () => {
+    const { job, worker, admin } = await setup();
+    const { json } = await call(addItem, "POST", { cookie: admin, params: { id: job.id }, body: { ...part, description: "Front axle" } });
+    await call(editItem, "PATCH", { cookie: worker, params: { id: job.id, itemId: json.data.id }, body: { ...part, quantity: "3" } });
+    expect((await fresh(json.data.id)).description).toBe("Front axle");
+  });
+});
+
+describe("price list", () => {
+  it("reads valid lines and skips the rest", () => {
+    expect(parsePriceList("Car Wash = 300\nPolish=1500.50\nnonsense\nBad = abc\n = 5")).toEqual({ "Car Wash": 300, Polish: 1500.5 });
+  });
+  it("has a price only for names in the default list", () => {
+    const prices = parsePriceList(DEFAULT_PRICE_LIST);
+    expect(prices["Car Wash"]).toBe(300);
+    expect(prices["Brake Noise"]).toBeUndefined();
+    expect(DEFAULT_PRICE_LIST.length).toBeLessThan(8000);
   });
 });

@@ -121,7 +121,7 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 p-3" aria-label="Main">
-      <Logo name={garage} className="mb-4 ml-1 text-sidebar-foreground" />
+      <Logo name={garage} light className="mb-4 ml-1 text-sm text-sidebar-foreground" />
       {items.map(([label, href, Icon]) => {
         const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`));
         return (
@@ -164,7 +164,7 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2.5">
           <button aria-label="Open menu" className="p-1 lg:hidden" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
-          {role === "WORKER" ? <Logo name={garage} className="lg:hidden" /> : <GlobalSearch base={base} canSeeInvoices={role === "ADMIN"} />}
+          {role === "WORKER" ? <Logo name={garage} className="text-xs lg:hidden" logoClassName="h-6" /> : <GlobalSearch base={base} canSeeInvoices={role === "ADMIN"} />}
           {role !== "WORKER" && (
             <div className="ml-auto shrink-0">
               <FormDialog trigger="+ Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />

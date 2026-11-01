@@ -35,9 +35,12 @@ function toLocalInput(value: unknown) {
 }
 
 export function FormDialog({
-  trigger, title, endpoint, method = "POST", fields, initial = {}, submitLabel = "Save", success = "Saved", variant = "default", redirectTo,
+  trigger, triggerLabel, triggerSize = "sm", title, endpoint, method = "POST", fields, initial = {}, submitLabel = "Save", success = "Saved", variant = "default", redirectTo,
 }: {
-  trigger: string;
+  trigger: React.ReactNode;
+  /** Accessible name, for a trigger that is only an icon. */
+  triggerLabel?: string;
+  triggerSize?: "sm" | "icon-sm";
   title: string;
   endpoint: string;
   method?: "POST" | "PATCH";
@@ -84,7 +87,7 @@ export function FormDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant={variant} size="sm" />}>{trigger}</DialogTrigger>
+      <DialogTrigger render={<Button variant={variant} size={triggerSize} aria-label={triggerLabel} title={triggerLabel} />}>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">

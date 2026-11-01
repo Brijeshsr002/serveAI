@@ -122,16 +122,17 @@ describe("status transitions", () => {
     expect((await setStatus(raj, job.id, "COMPLETED", { override: true, notes: "x" })).status).toBe(403);
   });
 
-  it("lets a receptionist cancel but not progress a job", async () => {
+  it("lets a receptionist progress and cancel a job, but not reopen it", async () => {
     const { job } = await assigned();
-    expect((await setStatus(reception, job.id, "VEHICLE_RECEIVED")).status).toBe(403);
+    expect((await setStatus(reception, job.id, "VEHICLE_RECEIVED")).status).toBe(200);
     expect((await setStatus(reception, job.id, "CANCELLED")).status).toBe(200);
+    expect((await setStatus(reception, job.id, "INSPECTION")).status).toBe(422);
     expect((await setStatus(reception, job.id, "CANCELLED")).status).toBe(409);
   });
 
   it("only lets an admin override, requires a reason, and logs it", async () => {
     const { job } = await assigned();
-    expect((await setStatus(admin, job.id, "COMPLETED")).status).toBe(422);
+    expect((await setStatus(admin, job.id, "ASSIGNED")).status).toBe(409);
     expect((await setStatus(admin, job.id, "COMPLETED", { override: true })).status).toBe(400);
     expect((await setStatus(admin, job.id, "COMPLETED", { override: true, notes: "Customer collected early" })).status).toBe(200);
     const history = await db.serviceStatusHistory.findFirstOrThrow({ where: { serviceJobId: job.id, newStatus: "COMPLETED" } });

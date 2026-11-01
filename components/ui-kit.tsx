@@ -15,6 +15,16 @@ export function PaymentBadge({ status }: { status: PaymentStatus | "UNPAID" }) {
   return <span className={cn("inline-block rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap", color)}>{status.charAt(0) + status.slice(1).toLowerCase()}</span>;
 }
 
+/** Only shows for lines that aren't on the bill yet. */
+export function ApprovalBadge({ approval }: { approval: "APPROVED" | "PENDING" | "DECLINED" }) {
+  if (approval === "APPROVED") return null;
+  return (
+    <span className={cn("ml-1.5 inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-medium whitespace-nowrap", approval === "PENDING" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600")}>
+      {approval === "PENDING" ? "Waiting for customer" : "Declined"}
+    </span>
+  );
+}
+
 export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: React.ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">

@@ -1,13 +1,16 @@
 "use client";
 
 import type { Priority, ServiceStatus } from "@prisma/client";
+import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { SELECT_CLASS } from "@/components/actions";
+import { FormDialog, SELECT_CLASS, type FormField } from "@/components/actions";
+import { jobEditFields } from "@/components/forms-config";
 import { TextLink } from "@/components/ui-kit";
+import { VoiceStatus } from "@/components/voice-status";
 import { api } from "@/lib/client";
-import { boardTargets, STATUS_COLOR, STATUS_LABEL, STATUSES } from "@/lib/status";
+import { boardTargets, isTerminal, STATUS_COLOR, STATUS_LABEL, STATUSES } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 export type BoardJob = {
@@ -19,8 +22,17 @@ export type BoardJob = {
   customerName: string;
   registrationNumber: string;
   vehicleName: string;
+  workerId: string | null;
   workerName: string | null;
   estimate: string;
+  /** The values the edit form starts from. */
+  edit: {
+    customerComplaint: string | null;
+    internalNotes: string | null;
+    estimatedAmount: string | null;
+    appointmentDate: string | null;
+    expectedCompletion: string | null;
+  };
 };
 
 const PRIORITY_COLOR: Partial<Record<Priority, string>> = {
@@ -28,23 +40,33 @@ const PRIORITY_COLOR: Partial<Record<Priority, string>> = {
   URGENT: "bg-red-100 text-red-700",
 };
 
-export function JobBoard({ jobs, counts, base, role }: {
+export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
   jobs: BoardJob[];
   /** Totals per status, which can exceed the cards loaded. */
   counts: Partial<Record<ServiceStatus, number>>;
   base: string;
-  role: "ADMIN" | "RECEPTIONIST";
+  workers: { id: string; name: string; activeJobs: number }[];
+  serviceTypes: string[];
 }) {
   const router = useRouter();
   const [moved, setMoved] = useState<Record<string, ServiceStatus>>({});
+  const [assigned, setAssigned] = useState<Record<string, { id: string; name: string }>>({});
   const [dragging, setDragging] = useState<BoardJob | null>(null);
   const [over, setOver] = useState<ServiceStatus | null>(null);
 
   // Fresh server data replaces any optimistic moves.
-  useEffect(() => setMoved({}), [jobs]);
+  useEffect(() => {
+    setMoved({});
+    setAssigned({});
+  }, [jobs]);
 
-  const current = jobs.map((j) => ({ ...j, status: moved[j.id] ?? j.status }));
-  const dropTargets = dragging ? boardTargets(role, dragging.status) : [];
+  const current = jobs.map((j) => ({
+    ...j,
+    status: moved[j.id] ?? j.status,
+    workerId: assigned[j.id]?.id ?? j.workerId,
+    workerName: assigned[j.id]?.name ?? j.workerName,
+  }));
+  const dropTargets = dragging ? boardTargets(dragging.status) : [];
 
   const totals = { ...counts };
   for (const j of jobs) {
@@ -57,6 +79,7 @@ export function JobBoard({ jobs, counts, base, role }: {
 
   async function move(job: BoardJob, to: ServiceStatus) {
     if (to === "CANCELLED" && !window.confirm(`Cancel ${job.serviceNumber}? The customer will be told on WhatsApp.`)) return;
+    if (to === "COMPLETED" && !window.confirm(`Complete ${job.serviceNumber}? The customer will be told on WhatsApp.`)) return;
     setMoved((m) => ({ ...m, [job.id]: to }));
     try {
       await api(`/api/service-jobs/${job.id}/status`, { method: "POST", body: { status: to } });
@@ -67,6 +90,33 @@ export function JobBoard({ jobs, counts, base, role }: {
     }
     router.refresh();
   }
+
+  async function assign(job: BoardJob, workerId: string) {
+    const worker = workers.find((w) => w.id === workerId);
+    if (!worker) return;
+    setAssigned((a) => ({ ...a, [job.id]: { id: worker.id, name: worker.name } }));
+    if (job.status === "NEW") setMoved((m) => ({ ...m, [job.id]: "ASSIGNED" }));
+    try {
+      await api(`/api/service-jobs/${job.id}/assign`, { method: "POST", body: { workerId } });
+      toast.success(`${job.serviceNumber} assigned to ${worker.name}`);
+    } catch (err) {
+      setAssigned(({ [job.id]: _reverted, ...rest }) => rest);
+      setMoved(({ [job.id]: _reverted, ...rest }) => rest);
+      toast.error((err as Error).message);
+    }
+    router.refresh();
+  }
+
+  const editFields = (job: BoardJob): FormField[] => [
+    {
+      name: "serviceType",
+      label: "Service type",
+      type: "select",
+      required: true,
+      options: [...new Set([job.serviceType, ...serviceTypes])].map((t) => ({ value: t, label: t })),
+    },
+    ...jobEditFields,
+  ];
 
   return (
     <div className="flex items-start gap-3 overflow-x-auto pb-4">
@@ -89,6 +139,8 @@ export function JobBoard({ jobs, counts, base, role }: {
             onDrop={(e) => {
               e.preventDefault();
               setOver(null);
+              // Moving the card unmounts it, so its own drag-end event never arrives.
+              setDragging(null);
               if (dragging && droppable) void move(dragging, status);
             }}
             className={cn(
@@ -104,12 +156,14 @@ export function JobBoard({ jobs, counts, base, role }: {
             </header>
             <div className="min-h-16 space-y-2">
               {cards.map((job) => {
-                const targets = boardTargets(role, job.status);
+                const targets = boardTargets(job.status);
                 return (
                   <article
                     key={job.id}
                     draggable={targets.length > 0}
                     onDragStart={(e) => {
+                      // The edit form is a portal, so its events bubble here too. Only drags from the card itself count.
+                      if (!e.currentTarget.contains(e.target as Node)) return;
                       e.dataTransfer.setData("text/plain", job.serviceNumber);
                       e.dataTransfer.effectAllowed = "move";
                       setDragging(job);
@@ -122,9 +176,23 @@ export function JobBoard({ jobs, counts, base, role }: {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <TextLink href={`${base}/jobs/${job.id}`}>{job.serviceNumber}</TextLink>
-                      {PRIORITY_COLOR[job.priority] && (
-                        <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", PRIORITY_COLOR[job.priority])}>{job.priority.charAt(0) + job.priority.slice(1).toLowerCase()}</span>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {PRIORITY_COLOR[job.priority] && (
+                          <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", PRIORITY_COLOR[job.priority])}>{job.priority.charAt(0) + job.priority.slice(1).toLowerCase()}</span>
+                        )}
+                        <FormDialog
+                          trigger={<Pencil className="size-3.5" />}
+                          triggerLabel={`Edit ${job.serviceNumber}`}
+                          triggerSize="icon-sm"
+                          variant="ghost"
+                          title={`Edit ${job.serviceNumber}`}
+                          method="PATCH"
+                          endpoint={`/api/service-jobs/${job.id}`}
+                          fields={editFields(job)}
+                          initial={{ ...job.edit, serviceType: job.serviceType, priority: job.priority }}
+                          success="Job updated"
+                        />
+                      </div>
                     </div>
                     <p className="font-medium break-words">{job.customerName}</p>
                     <p className="text-xs break-words text-muted-foreground">{job.registrationNumber} · {job.vehicleName}</p>
@@ -133,6 +201,19 @@ export function JobBoard({ jobs, counts, base, role }: {
                       {job.workerName ? <span className="min-w-0 truncate">{job.workerName}</span> : <span className="text-amber-700">Unassigned</span>}
                       <span className="shrink-0 tabular-nums">{job.estimate}</span>
                     </div>
+                    {targets.length > 0 && <VoiceStatus compact jobId={job.id} options={targets.filter((t) => t !== "CANCELLED")} />}
+                    {!isTerminal(job.status) && (
+                      <select
+                        aria-label={`Assign ${job.serviceNumber}`}
+                        className={cn(SELECT_CLASS, "mt-1 h-7 text-xs")}
+                        value={job.workerId ?? ""}
+                        onChange={(e) => void assign(job, e.target.value)}
+                      >
+                        {!job.workerId && <option value="">Assign worker…</option>}
+                        {job.workerId && !workers.some((w) => w.id === job.workerId) && <option value={job.workerId}>{job.workerName}</option>}
+                        {workers.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.activeJobs} active)</option>)}
+                      </select>
+                    )}
                     {targets.length > 0 && (
                       <select
                         aria-label={`Move ${job.serviceNumber}`}

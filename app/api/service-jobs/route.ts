@@ -2,12 +2,12 @@ import { ServiceStatus } from "@prisma/client";
 import { authed, ok } from "@/lib/api/route";
 import { db } from "@/lib/db";
 import { ALL_ROLES, STAFF } from "@/lib/permissions";
-import { createJob, jobSchema, jobScope } from "@/lib/services/jobs";
+import { createJob, hideFromWorker, jobSchema, jobScope } from "@/lib/services/jobs";
 
 export const GET = authed(ALL_ROLES, async ({ req, user }) => {
   const status = req.nextUrl.searchParams.get("status");
   const q = req.nextUrl.searchParams.get("q")?.trim();
-  return db.serviceJob.findMany({
+  const jobs = await db.serviceJob.findMany({
     where: {
       ...jobScope(user),
       ...(status && status in ServiceStatus ? { status: status as ServiceStatus } : {}),
@@ -29,6 +29,7 @@ export const GET = authed(ALL_ROLES, async ({ req, user }) => {
       assignedWorker: { select: { id: true, name: true } },
     },
   });
+  return user.role === "WORKER" ? jobs.map(hideFromWorker) : jobs;
 });
 
 export const POST = authed(STAFF, async ({ actor, body }) => ok(await createJob(actor, await body(jobSchema), undefined, true), 201));

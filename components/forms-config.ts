@@ -45,10 +45,9 @@ export const itemFields: FormField[] = [
   { name: "tax", label: "Tax amount (₹)", type: "number" },
   { name: "discount", label: "Discount amount (₹)", type: "number" },
   { name: "notifyCustomer", label: "Tell the customer on WhatsApp", type: "checkbox" },
+  { name: "needsApproval", label: "Ask the customer to approve first (not billed until they say yes)", type: "checkbox" },
 ];
 
-/** Tax and discount stay with the office; the customer is always told. */
-export const workerItemFields: FormField[] = itemFields.filter((f) => !["description", "tax", "discount", "notifyCustomer"].includes(f.name));
 
 export const jobEditFields: FormField[] = [
   { name: "customerComplaint", label: "Customer complaint", type: "textarea" },

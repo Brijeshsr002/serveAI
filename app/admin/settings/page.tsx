@@ -21,6 +21,11 @@ export default async function SettingsPage() {
             ],
           },
           {
+            title: "Price list",
+            hint: "One per line, like Car Wash = 300. Tapping one of these fills in its amount, and anyone can still change it before saving.",
+            fields: [{ key: "price_list", label: "Prices (₹)", long: true }],
+          },
+          {
             title: "WhatsApp automation",
             hint: "Turn commands off if your Sendiee AI assistant already answers status questions, so customers don't get two replies. Slot booking also stops when commands are off.",
             fields: [{ key: "whatsapp_commands_enabled", label: "Auto-answer status, amount, payment and invoice questions", toggle: true }],

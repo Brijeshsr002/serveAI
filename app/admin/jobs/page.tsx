@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Prisma, ServiceStatus } from "@prisma/client";
+import { isBoardView, ViewSwitch } from "@/components/data-board";
 import { JobBoard } from "@/components/job-board";
 import { NewJobDialog } from "@/components/job-form";
 import { PageHeader, SearchForm, Section, SimpleTable, StatusBadge, TextLink } from "@/components/ui-kit";
@@ -29,7 +30,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const user = await requireRole(STAFF);
   const base = roleBase[user.role];
   const { q, status, view } = await searchParams;
-  const board = view !== "list";
+  const board = isBoardView(view);
   const term = q?.trim();
   const reg = term ? normalizeRegistration(term) : "";
   const where: Prisma.ServiceJobWhereInput = {
@@ -57,19 +58,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     workersWithLoad(),
   ]);
   const counts = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]));
-  const viewLink = (next?: string) => {
-    const params = new URLSearchParams();
-    if (next) params.set("view", next);
-    if (q) params.set("q", q);
-    return `?${params}`;
-  };
   return (
     <>
       <PageHeader title={board ? "Kanban Board" : "Service Jobs"} subtitle={board ? `${statusCounts.reduce((sum, c) => sum + c._count, 0)} total` : `${jobs.length} shown`}>
-        <nav aria-label="Job view" className="flex rounded-lg border bg-card p-0.5 text-sm">
-          <Link href={viewLink()} aria-current={board ? "page" : undefined} className={cn("rounded-md px-3 py-1 hover:bg-accent", board && "bg-primary font-medium text-primary-foreground hover:bg-primary")}>Kanban</Link>
-          <Link href={viewLink("list")} aria-current={board ? undefined : "page"} className={cn("rounded-md px-3 py-1 hover:bg-accent", !board && "bg-primary font-medium text-primary-foreground hover:bg-primary")}>List</Link>
-        </nav>
+        <ViewSwitch board={board} q={q} />
         <NewJobDialog
           base={base}
           workers={workers}
@@ -86,8 +78,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       {board ? (
         <JobBoard
           base={base}
-          role={user.role === "ADMIN" ? "ADMIN" : "RECEPTIONIST"}
           counts={counts}
+          workers={workers}
+          serviceTypes={types.map((t) => t.name)}
           jobs={jobs.map((j) => ({
             id: j.id,
             serviceNumber: j.serviceNumber,
@@ -97,15 +90,23 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
             customerName: j.customer.name,
             registrationNumber: j.vehicle.registrationNumber,
             vehicleName: `${j.vehicle.brand} ${j.vehicle.model}`,
+            workerId: j.assignedWorkerId,
             workerName: j.assignedWorker?.name ?? null,
             estimate: money(j.estimatedAmount),
+            edit: {
+              customerComplaint: j.customerComplaint,
+              internalNotes: j.internalNotes,
+              estimatedAmount: j.estimatedAmount?.toString() ?? null,
+              appointmentDate: j.appointmentDate?.toISOString() ?? null,
+              expectedCompletion: j.expectedCompletion?.toISOString() ?? null,
+            },
           }))}
         />
       ) : (
         <>
       <div className="mb-4 flex flex-wrap gap-1.5 text-xs">
         {[undefined, ...STATUSES].map((s) => (
-          <Link key={s ?? "all"} href={s ? `?view=list&status=${s}` : "?view=list"} className={cn("rounded-full border px-2.5 py-1 hover:bg-accent", status === s && "border-primary text-primary")}>
+          <Link key={s ?? "all"} href={`?${new URLSearchParams({ view: "list", ...(s ? { status: s } : {}), ...(q ? { q } : {}) })}`} className={cn("rounded-full border px-2.5 py-1 hover:bg-accent", status === s && "border-primary text-primary")}>
             {s ? STATUS_LABEL[s] : "All"}
           </Link>
         ))}

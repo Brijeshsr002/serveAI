@@ -1,12 +1,14 @@
 import { ActionButton, AssignControl, CopyButton, FormDialog } from "@/components/actions";
 import { itemFields, jobEditFields } from "@/components/forms-config";
-import { Field, PageHeader, PaymentBadge, Section, SimpleTable, StatusBadge, TextLink } from "@/components/ui-kit";
+import { ApprovalBadge, Field, PageHeader, PaymentBadge, Section, SimpleTable, StatusBadge, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { dateTime, money, time } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { getJobForUser, workersWithLoad } from "@/lib/services/jobs";
-import { trackingUrl } from "@/lib/settings";
+import { getSettings, trackingUrl } from "@/lib/settings";
+import { parsePriceList } from "@/lib/work-catalog";
+import { WorkItemDialog } from "@/components/work-item-dialog";
 import { boardTargets, isTerminal, STATUS_LABEL, STATUSES } from "@/lib/status";
 import { VoiceStatus } from "@/components/voice-status";
 
@@ -26,8 +28,9 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   ]);
   const paid = job.payments.some((p) => p.status === "PAID");
   const openPayment = job.payments.find((p) => p.status === "PENDING" || p.status === "PROCESSING");
-  const itemsTotal = job.items.reduce((sum, i) => sum + Number(i.total), 0);
+  const itemsTotal = job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0);
   const closed = isTerminal(job.status);
+  const prices = parsePriceList((await getSettings()).price_list);
 
   return (
     <>
@@ -54,7 +57,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          {user.role === "ADMIN" && <VoiceStatus jobId={job.id} options={boardTargets("ADMIN", job.status).filter((s) => s !== "CANCELLED")} />}
+          <VoiceStatus jobId={job.id} options={boardTargets(job.status).filter((s) => s !== "CANCELLED")} />
           <Section title="Details">
             <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
               <Field label="Customer"><TextLink href={`${base}/customers/${job.customer.id}`}>{job.customer.name}</TextLink></Field>
@@ -73,13 +76,13 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
           <Section
             title="Service items"
-            action={!paid && <FormDialog trigger="Add item" title="Add service item" variant="outline" endpoint={`/api/service-jobs/${job.id}/items`} fields={itemFields} initial={{ quantity: 1, tax: 0, discount: 0, itemType: "PART", notifyCustomer: true }} success="Item added" />}
+            action={!paid && <WorkItemDialog staff jobId={job.id} prices={prices} variant="outline" trigger="Add item" />}
           >
             <SimpleTable
               headers={["Item", "Type", "Qty", "Price", "Tax", "Discount", "Total", ""]}
               empty="No items yet. Add parts and labour to build the invoice."
               rows={job.items.map((i) => [
-                i.name,
+                <div key="n">{i.name}<ApprovalBadge approval={i.approval} /></div>,
                 i.itemType.toLowerCase(),
                 Number(i.quantity),
                 money(i.unitPrice),
@@ -87,7 +90,9 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                 money(i.discount),
                 money(i.total),
                 !paid && (
-                  <div key="x" className="flex gap-1">
+                  <div key="x" className="flex flex-wrap gap-1">
+                    {i.approval === "PENDING" && <ActionButton label="Customer said yes" variant="outline" endpoint={`/api/service-jobs/${job.id}/items/${i.id}/approval`} body={{ approve: true }} success="Added to the bill" />}
+                    {i.approval === "PENDING" && <ActionButton label="Customer said no" variant="ghost" endpoint={`/api/service-jobs/${job.id}/items/${i.id}/approval`} body={{ approve: false }} success="Marked as declined" />}
                     <FormDialog trigger="Edit" title={`Edit ${i.name}`} variant="ghost" method="PATCH" endpoint={`/api/service-jobs/${job.id}/items/${i.id}`} fields={itemFields} initial={{ itemType: i.itemType, name: i.name, description: i.description, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), tax: Number(i.tax), discount: Number(i.discount), notifyCustomer: true }} success="Item updated" />
                     <ActionButton label="Remove" variant="ghost" method="DELETE" endpoint={`/api/service-jobs/${job.id}/items/${i.id}?notify=1`} confirm={`Remove ${i.name}? The customer will be told on WhatsApp.`} />
                   </div>

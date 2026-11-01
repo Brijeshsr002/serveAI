@@ -25,7 +25,7 @@ const recognizer = () => {
 };
 
 /** Speak a step ("start service", "waiting for parts"). Asks before changing, because the customer gets a message. */
-export function VoiceStatus({ jobId, options }: { jobId: string; options: ServiceStatus[] }) {
+export function VoiceStatus({ jobId, options, compact }: { jobId: string; options: ServiceStatus[]; compact?: boolean }) {
   const router = useRouter();
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
@@ -34,7 +34,8 @@ export function VoiceStatus({ jobId, options }: { jobId: string; options: Servic
   const [busy, setBusy] = useState(false);
 
   useEffect(() => setSupported(Boolean(recognizer())), []);
-  if (!supported || options.length === 0) return null;
+  if (options.length === 0) return null;
+  if (!supported) return compact ? null : <p className="text-xs text-muted-foreground">Voice commands need Chrome, Edge or Safari.</p>;
 
   function listen() {
     const Speech = recognizer();
@@ -51,7 +52,10 @@ export function VoiceStatus({ jobId, options }: { jobId: string; options: Servic
     };
     speech.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") toast.error("Allow microphone access to use voice");
-      else if (e.error !== "no-speech" && e.error !== "aborted") toast.error("Couldn't hear that. Please try again.");
+      else if (e.error === "network" || e.error === "language-not-supported") toast.error("Voice isn't available in this browser. Please use Chrome, on the normal site link.");
+      else if (e.error === "audio-capture") toast.error("No microphone found");
+      else if (e.error === "no-speech") toast.error("Didn't hear anything. Please try again.");
+      else if (e.error !== "aborted") toast.error("Couldn't hear that. Please try again.");
     };
     speech.onend = () => setListening(false);
     setHeard("");
@@ -76,11 +80,11 @@ export function VoiceStatus({ jobId, options }: { jobId: string; options: Servic
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-dashed p-3">
-      <Button type="button" variant="outline" size="lg" className="w-full" disabled={listening || busy} onClick={listen}>
-        <Mic className="mr-2 size-4" /> {listening ? "Listening…" : "Speak the next step"}
+    <div className={compact ? "space-y-1" : "space-y-2 rounded-lg border border-dashed p-3"}>
+      <Button type="button" variant="outline" size={compact ? "sm" : "lg"} className="w-full" disabled={listening || busy} onClick={listen}>
+        <Mic className="mr-1 size-4" /> {listening ? "Listening…" : compact ? "Voice" : "Voice command: speak the next step"}
       </Button>
-      <p className="text-xs text-muted-foreground">Say: {options.map((s) => STATUS_LABEL[s]).join(", ")}</p>
+      {!compact && <p className="text-xs text-muted-foreground">Say: {options.map((s) => STATUS_LABEL[s]).join(", ")}</p>}
       <div aria-live="polite">
         {heard && match && (
           <div className="space-y-2 text-sm">

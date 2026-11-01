@@ -187,11 +187,11 @@ export const NotificationService = {
   },
 
   /** A part, labour or cost changed. Outside the window, the status template carries the change as its status text. */
-  async sendBillChange(job: JobContext, step: "ITEM_ADDED" | "ITEM_UPDATED" | "ITEM_REMOVED", item: { name: string; cost: unknown }, billTotal: number) {
+  async sendBillChange(job: JobContext, step: "ITEM_APPROVAL" | "ITEM_ADDED" | "ITEM_UPDATED" | "ITEM_REMOVED", item: { name: string; cost: unknown }, billTotal: number) {
     const settings = await getSettings();
     const cost = rupees(item.cost as number);
     const total = rupees(billTotal);
-    const summary = { ITEM_ADDED: `Added ${item.name} (${cost})`, ITEM_UPDATED: `Updated ${item.name} to ${cost}`, ITEM_REMOVED: `Removed ${item.name}` }[step];
+    const summary = { ITEM_APPROVAL: `Approval needed for ${item.name} (${cost})`, ITEM_ADDED: `Added ${item.name} (${cost})`, ITEM_UPDATED: `Updated ${item.name} to ${cost}`, ITEM_REMOVED: `Removed ${item.name}` }[step];
     await notifyStep({
       step,
       kind: step,

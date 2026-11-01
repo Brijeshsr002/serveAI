@@ -3,7 +3,7 @@
 import { useId } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const COLORS = ["#EA580C", "#0F766E", "#1D4ED8", "#BE123C", "#7C3AED", "#A16207", "#0369A1", "#4D7C0F", "#475569"];
+const COLORS = ["#4A2BE8", "#0E9F8E", "#2563EB", "#DB2777", "#D97706", "#7C3AED", "#0891B2", "#65A30D", "#475569"];
 const INK = "#64748b";
 const GRID = "#eef1f5";
 
@@ -50,14 +50,14 @@ function RevenueBars({ data, label }: { data: Row[]; label: string }) {
         <BarChart data={data} margin={{ right: 4, top: 8, left: 0 }}>
           <defs>
             <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#F97316" />
-              <stop offset="100%" stopColor="#C2410C" />
+              <stop offset="0%" stopColor="#7A5CFA" />
+              <stop offset="100%" stopColor="#4A2BE8" />
             </linearGradient>
           </defs>
           <CartesianGrid stroke={GRID} vertical={false} />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: INK }} axisLine={false} tickLine={false} minTickGap={16} />
+          <XAxis dataKey="name" tick={{ fontSize: 10, fill: INK }} axisLine={false} tickLine={false} interval={0} angle={data.length > 6 ? -40 : 0} textAnchor={data.length > 6 ? "end" : "middle"} height={data.length > 6 ? 44 : 24} />
           <YAxis width={44} allowDecimals={false} tick={{ fontSize: 11, fill: INK }} axisLine={false} tickLine={false} tickFormatter={shortInr} />
-          <Tooltip formatter={(v) => [inr(Number(v)), label]} cursor={{ fill: "rgba(234,88,12,0.07)" }} contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0" }} />
+          <Tooltip labelFormatter={(name, payload) => String(payload?.[0]?.payload?.full ?? name)} formatter={(v) => [inr(Number(v)), label]} cursor={{ fill: "rgba(74,43,232,0.07)" }} contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0" }} />
           <Bar dataKey="value" fill={`url(#${id})`} radius={[6, 6, 0, 0]} maxBarSize={36} />
         </BarChart>
       </ResponsiveContainer>

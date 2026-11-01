@@ -28,6 +28,9 @@ export async function dashboardStats() {
   };
 }
 
+const dayFormat = (options: Intl.DateTimeFormatOptions, key: string) =>
+  new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", ...options }).format(new Date(`${key}T12:00:00+05:30`));
+
 export async function chartData() {
   const today = startOfDayIST();
   const dailyStart = addDays(today, -13);
@@ -47,9 +50,9 @@ export async function chartData() {
   for (const p of paid) {
     if (!p.paidAt) continue;
     const day = istDayKey(p.paidAt);
-    if (daily.has(day)) daily.set(day, daily.get(day)! + toNumber(p.amount));
+    if (daily.has(day)) daily.set(day, daily.get(day)! + Math.round(toNumber(p.amount) * 100));
     const month = istMonthKey(p.paidAt);
-    monthly.set(month, (monthly.get(month) ?? 0) + toNumber(p.amount));
+    monthly.set(month, (monthly.get(month) ?? 0) + Math.round(toNumber(p.amount) * 100));
   }
 
   return {
@@ -59,8 +62,16 @@ export async function chartData() {
       value: byStatus.find((b) => b.status === s)?._count ?? 0,
     })),
     byType: byType.map((t) => ({ name: t.serviceType, value: t._count })),
-    dailyRevenue: [...daily].map(([day, value]) => ({ name: day.slice(5), value })),
-    monthlyRevenue: [...monthly].sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value })),
+    dailyRevenue: [...daily].map(([day, paise]) => ({
+      name: dayFormat({ day: "numeric", month: "short" }, day),
+      full: dayFormat({ weekday: "short", day: "numeric", month: "long", year: "numeric" }, day),
+      value: paise / 100,
+    })),
+    monthlyRevenue: [...monthly].sort(([a], [b]) => a.localeCompare(b)).map(([month, paise]) => ({
+      name: dayFormat({ month: "short", year: "numeric" }, `${month}-15`),
+      full: dayFormat({ month: "long", year: "numeric" }, `${month}-15`),
+      value: paise / 100,
+    })),
     workerPerformance: workers.map((w) => {
       const rows = performance.filter((p) => p.assignedWorkerId === w.id);
       const count = (pred: (s: (typeof rows)[number]) => boolean) => rows.filter(pred).reduce((n, r) => n + r._count, 0);

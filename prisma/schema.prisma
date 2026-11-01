@@ -38,6 +38,12 @@ enum ItemType {
   SERVICE
 }
 
+enum ItemApproval {
+  APPROVED
+  PENDING
+  DECLINED
+}
+
 enum PaymentStatus {
   PENDING
   PROCESSING
@@ -221,6 +227,8 @@ model ServiceItem {
   /// Discount amount for the line, in rupees (not a percentage).
   discount     Decimal  @default(0) @db.Decimal(12, 2)
   total        Decimal  @db.Decimal(12, 2)
+  /// Only APPROVED lines count towards the bill and invoice.
+  approval     ItemApproval @default(APPROVED)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

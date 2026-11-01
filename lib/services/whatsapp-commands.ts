@@ -6,6 +6,7 @@ import { rupees } from "@/lib/format";
 import { sendFreeformText } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
 import { normalizeRegistration } from "@/lib/phone";
+import { decideItems } from "@/lib/services/invoices";
 import { type BookingPending, continueBooking, isBookingRequest, startBooking } from "@/lib/services/whatsapp-booking";
 import { getSettings, trackingUrl, appUrl } from "@/lib/settings";
 import { ACTIVE_STATUSES, STATUS_LABEL } from "@/lib/status";
@@ -125,7 +126,44 @@ export async function replyForMessage(customer: Customer, text: string): Promise
   return { reply: `You have ${jobs.length} active vehicles:\n\n${list}\n\nWhich vehicle would you like to check?` };
 }
 
+/**
+ * An exact YES or NO answers extra work, but only a line we really asked this customer about.
+ * With more than one line waiting, a single word can't say which, so they choose on the tracking page.
+ */
+export async function approvalReply(customer: Customer, text: string): Promise<{ reply: string; jobId?: string } | null> {
+  const answer = text.trim().replace(/[.!]+$/, "").toLowerCase();
+  const approve = ["yes", "approve", "approved"].includes(answer);
+  if (!approve && !["no", "decline", "reject"].includes(answer)) return null;
+  const items = await db.serviceItem.findMany({
+    where: { approval: "PENDING", serviceJob: { customerId: customer.id, status: { in: ACTIVE_STATUSES }, payments: { none: { status: "PAID" } } } },
+    include: { serviceJob: { select: { trackingToken: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const sent = await db.notification.findMany({ where: { customerId: customer.id, kind: "ITEM_APPROVAL", status: "SENT" }, select: { serviceJobId: true, createdAt: true } });
+  const asked = items.filter((i) => sent.some((n) => n.serviceJobId === i.serviceJobId && n.createdAt >= i.updatedAt));
+  if (asked.length === 0) return null;
+  if (items.length > 1) {
+    const lines = items.map((i) => `- ${i.name}: ${rupees(i.total)}`).join("\n");
+    const links = [...new Set(items.map((i) => trackingUrl(i.serviceJob.trackingToken)))].join("\n");
+    return { reply: `You have ${items.length} items waiting for your OK:\n${lines}\n\nPlease choose each one here:\n${links}` };
+  }
+  const [item] = asked;
+  const actor = { id: null, role: "CUSTOMER", name: customer.name };
+  const decided = await decideItems(actor, item.serviceJobId, [item.id], approve);
+  if (decided.length === 0) return null;
+  return {
+    jobId: item.serviceJobId,
+    reply: approve ? `Thank you! We've added ${item.name} (${rupees(item.total)}) to your service.` : `No problem, we won't do ${item.name}.`,
+  };
+}
+
 export async function runCommands(customer: Customer, text: string) {
+  const answered = await approvalReply(customer, text);
+  if (answered) {
+    await sendFreeformText({ customerId: customer.id, phone: customer.phone, serviceJobId: answered.jobId, text: answered.reply })
+      .catch((err) => console.error("Approval reply failed:", (err as Error).message));
+    return;
+  }
   const settings = await getSettings();
   if (settings.whatsapp_commands_enabled !== "true") return;
   const result = await replyForMessage(customer, text);

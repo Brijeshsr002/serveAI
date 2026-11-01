@@ -15,7 +15,7 @@ export default async function LoginPage() {
     <LiveScene clips={CLIPS.workshop} className="min-h-screen">
       <main className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 p-5 lg:grid-cols-[1fr_24rem] lg:p-10">
         <div>
-          <Logo name={center_name} className="text-2xl lg:text-3xl" markClassName="size-14" />
+          <Logo name={center_name} light className="text-xl lg:text-2xl" logoClassName="h-16 lg:h-20" />
           <h1 className="mt-6 hidden max-w-xl text-5xl font-bold tracking-tight text-balance lg:block">Every car, cared for like it&apos;s your own.</h1>
           <p className="mt-3 max-w-lg text-slate-200 lg:text-lg">{BRAND_TAGLINE}</p>
         </div>

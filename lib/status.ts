@@ -73,13 +73,11 @@ export const WORKER_ACTION: Partial<Record<ServiceStatus, string>> = {
 };
 
 /**
- * Columns a staff member may move a card to. Mirrors assertStatusChangeAllowed, which still decides on the server.
+ * Stages admin and reception may move an open job to, in any order. assertStatusChangeAllowed enforces this on the server.
  * ASSIGNED is left out because it needs a worker, so it happens through the assign action.
  */
-export const boardTargets = (role: "ADMIN" | "RECEPTIONIST", s: ServiceStatus): ServiceStatus[] => {
-  if (isTerminal(s)) return [];
-  return role === "ADMIN" ? [...TRANSITIONS[s].filter((n) => n !== "ASSIGNED"), "CANCELLED"] : ["CANCELLED"];
-};
+export const boardTargets = (s: ServiceStatus): ServiceStatus[] =>
+  isTerminal(s) ? [] : STATUSES.filter((n) => n !== s && n !== "NEW" && n !== "ASSIGNED");
 
 /** Spoken words for each step. Longer phrases are tried first, so "start inspection" isn't read as "start service". */
 const VOICE_WORDS: [ServiceStatus, string[]][] = [
