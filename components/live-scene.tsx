@@ -69,8 +69,6 @@ export function LiveScene({ clips, className, overlay, children }: { clips: stri
           }}
         />
       ))}
-        />
-      )}
       <div aria-hidden="true" className={cn("absolute inset-0 z-[2]", overlay ?? "bg-gradient-to-r from-[#0B1033]/92 via-[#0B1033]/70 to-[#0B1033]/30")} />
       <div className="relative z-10">{children}</div>
     </div>
