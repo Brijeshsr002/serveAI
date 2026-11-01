@@ -186,8 +186,9 @@ export async function processServiceRequest(input: z.output<typeof intakeSchema>
       expectedCompletion: null,
     },
     input.externalRef,
+    // Sent from inside createJob so "request received" goes before any auto-assignment message.
+    true,
   );
-  await NotificationService.sendServiceRequestReceived(await loadJobContext(job.id));
   return { job, duplicate: false };
 }
 

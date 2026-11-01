@@ -1,0 +1,80 @@
+/** Shipped work in plain English, oldest first. Add a new version at the end: the sidebar label comes from it. */
+export const CHANGELOG: { version: string; date: string; changes: string[] }[] = [
+  {
+    version: "1.0",
+    date: "2026-10-31",
+    changes: [
+      "Log in as an admin, receptionist or worker, and each person only sees what their role allows.",
+      "Customers, vehicles and service jobs, each with their own ID numbers.",
+      "Jobs move through set stages, from New to Completed, with a full history of every change.",
+      "Bills with labour and parts, PDF invoices, and online payment links.",
+      "WhatsApp messages to customers at each step, sent through Sendiee.",
+      "Admin, reception and worker dashboards, the WhatsApp inbox and reports with CSV export.",
+      "A tracking page customers can open from a link, with no login.",
+    ],
+  },
+  {
+    version: "1.1",
+    date: "2026-10-31",
+    changes: [
+      "Kanban board for service jobs: drag a card to move it to the next stage.",
+      "The garage name appears on the login page, sidebar, tracking page and invoices.",
+      "Workers can add, edit and remove parts and extra work on their jobs, and the customer is told.",
+      "Customer Messages page to edit, preview or switch off the message for each step.",
+      "Voice commands for job progress, and ready-made part and work names to tap.",
+      "Customers can book a slot on WhatsApp by sending BOOK.",
+      "Real car and workshop video on the login, dashboard and tracking pages.",
+      "A better invoice with an embedded font and a real car photo.",
+      "An Add customer button in the top bar for staff.",
+    ],
+  },
+  {
+    version: "1.2",
+    date: "2026-11-01",
+    changes: [
+      "Extra work waits for the customer's YES on WhatsApp or the tracking page before it goes on the bill.",
+      "Admin and reception can move jobs to any stage, and edit and assign them from the card.",
+      "Kanban view on customers, vehicles, payments, invoices, staff and service types.",
+      "New navy and violet ServAI look and logo, with a clean invoice over a car background.",
+      "Charts show proper dates, and job cards have voice control.",
+      "Invoices and payment links stay in step with approved work.",
+    ],
+  },
+  {
+    version: "1.3",
+    date: "2026-11-01",
+    changes: [
+      "Each service type can have a rate, and an admin's change applies at once.",
+      "Reception and workers can ask for a rate change, and an admin approves or rejects it.",
+      "New jobs and WhatsApp price questions start from the default rate.",
+    ],
+  },
+  {
+    version: "1.4",
+    date: "2026-11-01",
+    changes: [
+      "Clock in and out, leave marking, and a team attendance card and page.",
+      "Staff profiles with salary and performance. Salary is only visible to admins and the person themselves.",
+      "Admin pages now check the role themselves as well as through the layout.",
+    ],
+  },
+  {
+    version: "1.5",
+    date: "2026-11-01",
+    changes: [
+      "The top search now looks at name, phone and vehicle number only.",
+      "Customers and vehicles are one page: one card per customer listing their vehicles, with an Add vehicle button.",
+      "An eye button on each customer shows their whole record in a popup.",
+      "Click any bar or row on the dashboard and report charts to see the jobs or payments behind it.",
+      "Part prices now go through the same approval as service rates, and new parts can be added.",
+      "A notification bell in the top bar tells staff about rate requests, new rates and rejected requests.",
+      "Kanban cards show workers on leave and the booked appointment time, and the assign list marks who is on leave.",
+      "An optional setting assigns new jobs and moves jobs off a worker who goes on leave today, fewest jobs first.",
+      "Softer chart colours.",
+      "Invoices show the garage phone, address and email with small icons, a real rupee sign, and the ServAI mark.",
+      "This Updates page.",
+    ],
+  },
+];
+
+export const LATEST_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

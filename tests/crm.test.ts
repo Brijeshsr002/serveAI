@@ -149,11 +149,10 @@ describe("service jobs", () => {
 });
 
 describe("global search", () => {
-  it("finds customer, vehicle and job from a registration number", async () => {
-    const { customer, vehicle, job } = await makeJob();
+  it("finds the customer and vehicle from a registration number", async () => {
+    const { customer, vehicle } = await makeJob();
     const { json } = await call(search, "GET", { cookie, path: "/api/search?q=TN38AB1234" });
     expect(json.data.customers[0].id).toBe(customer.id);
     expect(json.data.vehicles[0].id).toBe(vehicle.id);
-    expect(json.data.jobs[0].id).toBe(job.id);
   });
 });

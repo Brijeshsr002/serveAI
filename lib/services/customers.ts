@@ -1,10 +1,12 @@
-import { Prisma } from "@prisma/client";
+import { type PaymentStatus, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { logActivity } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import { db, isUniqueViolation, nextCustomerCode } from "@/lib/db";
 import { conflict, notFound } from "@/lib/errors";
+import { date, dateTime, money, toNumber } from "@/lib/format";
 import { normalizePhone, normalizeRegistration, requirePhone } from "@/lib/phone";
+import { ACTIVE_STATUSES, TERMINAL } from "@/lib/status";
 
 const optionalText = z.string().trim().max(500).optional().nullable().transform((v) => v || null);
 
@@ -106,8 +108,8 @@ export async function findOrCreateCustomerByPhone(phone: string, name?: string |
   }
 }
 
-/** Search across name, phone, customer code and vehicle registration. */
-export function customerSearchWhere(q: string | null | undefined): Prisma.CustomerWhereInput {
+/** Name, phone and vehicle registration: all the top search looks at. */
+export function contactSearchWhere(q: string | null | undefined): Prisma.CustomerWhereInput {
   const term = q?.trim();
   if (!term) return {};
   const reg = normalizeRegistration(term);
@@ -115,9 +117,79 @@ export function customerSearchWhere(q: string | null | undefined): Prisma.Custom
   return {
     OR: [
       { name: { contains: term, mode: "insensitive" } },
-      { customerCode: { contains: term, mode: "insensitive" } },
       ...(phoneDigits.length >= 3 ? [{ phone: { contains: normalizePhone(phoneDigits) ?? phoneDigits } }] : []),
       ...(reg ? [{ vehicles: { some: { registrationNumber: { contains: reg } } } }] : []),
     ],
   };
 }
+
+/** The contact search, plus the customer code printed on each card. */
+export function customerSearchWhere(q: string | null | undefined): Prisma.CustomerWhereInput {
+  const term = q?.trim();
+  if (!term) return {};
+  return { OR: [...(contactSearchWhere(term).OR ?? []), { customerCode: { contains: term, mode: "insensitive" } }] };
+}
+
+/** Everything the view dialog shows, as plain strings, so it's safe to send to the browser. */
+export async function customerOverview(id: string) {
+  const job = {
+    select: {
+      id: true, serviceNumber: true, serviceType: true, status: true, appointmentDate: true, createdAt: true, estimatedAmount: true, finalAmount: true,
+      vehicle: { select: { registrationNumber: true } },
+      assignedWorker: { select: { name: true } },
+    },
+  } as const;
+  const [customer, active, recent, payments, totals] = await Promise.all([
+    db.customer.findUnique({ where: { id }, include: { vehicles: { orderBy: { createdAt: "asc" } } } }),
+    db.serviceJob.findMany({ ...job, where: { customerId: id, status: { in: ACTIVE_STATUSES } }, orderBy: { createdAt: "desc" } }),
+    db.serviceJob.findMany({ ...job, where: { customerId: id, status: { in: TERMINAL } }, orderBy: { updatedAt: "desc" }, take: 5 }),
+    db.payment.findMany({ where: { customerId: id }, orderBy: { createdAt: "desc" }, take: 5, include: { serviceJob: { select: { id: true, serviceNumber: true } } } }),
+    db.payment.groupBy({ by: ["status"], where: { customerId: id }, _sum: { amount: true } }),
+  ]);
+  if (!customer) throw notFound("CUSTOMER_NOT_FOUND", "Customer not found");
+  const jobRow = (j: (typeof active)[number]) => ({
+    id: j.id,
+    serviceNumber: j.serviceNumber,
+    serviceType: j.serviceType,
+    status: j.status,
+    registrationNumber: j.vehicle.registrationNumber,
+    workerName: j.assignedWorker?.name ?? null,
+    amount: money(j.finalAmount ?? j.estimatedAmount),
+    created: date(j.createdAt),
+    appointment: j.appointmentDate ? dateTime(j.appointmentDate) : null,
+  });
+  const sum = (...statuses: PaymentStatus[]) => money(totals.filter((t) => statuses.includes(t.status)).reduce((n, t) => n + toNumber(t._sum.amount), 0));
+  return {
+    id: customer.id,
+    name: customer.name,
+    customerCode: customer.customerCode,
+    phone: customer.phone,
+    email: customer.email,
+    address: customer.address,
+    city: customer.city,
+    notes: customer.notes,
+    vehicles: customer.vehicles.map((v) => ({
+      id: v.id,
+      registrationNumber: v.registrationNumber,
+      name: `${v.brand} ${v.model}`,
+      details: [v.manufacturingYear, v.fuelType, v.color].filter(Boolean).join(" · "),
+    })),
+    activeJobs: active.map(jobRow),
+    recentJobs: recent.map(jobRow),
+    payment: {
+      latestStatus: payments[0]?.status ?? null,
+      due: sum("PENDING", "PROCESSING"),
+      paid: sum("PAID"),
+      rows: payments.map((p) => ({
+        id: p.id,
+        jobId: p.serviceJob.id,
+        serviceNumber: p.serviceJob.serviceNumber,
+        amount: money(p.amount),
+        status: p.status,
+        when: dateTime(p.paidAt ?? p.createdAt),
+      })),
+    },
+  };
+}
+
+export type CustomerOverview = Awaited<ReturnType<typeof customerOverview>>;

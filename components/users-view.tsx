@@ -49,7 +49,7 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
       <PageHeader title={title}>
         <ViewSwitch board={board} />
         <FormDialog
-          trigger={`Add ${role === "WORKER" ? "worker" : "receptionist"}`}
+          trigger={`+ Add ${role === "WORKER" ? "worker" : "receptionist"}`}
           title={`Add ${role === "WORKER" ? "worker" : "receptionist"}`}
           endpoint="/api/users"
           fields={[...fields, { name: "password", label: "Initial password (8+ characters)", type: "password", required: true }]}

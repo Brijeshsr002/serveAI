@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Role } from "@prisma/client";
 import {
-  Activity, BarChart3, CalendarCheck, Car, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
+  Activity, BarChart3, CalendarCheck, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
   Search, Settings, ShieldCheck, Tags, User, Users, Wrench, X, type LucideIcon,
 } from "lucide-react";
 import { FormDialog } from "@/components/actions";
@@ -13,6 +13,8 @@ import { customerFields } from "@/components/forms-config";
 import { Input } from "@/components/ui/input";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
+import { NotificationBell } from "@/components/notification-bell";
+import { LATEST_VERSION } from "@/lib/changelog";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +24,6 @@ const NAV: Record<Role, NavItem[]> = {
   ADMIN: [
     ["Dashboard", "/admin/dashboard", LayoutDashboard],
     ["Customers", "/admin/customers", Users],
-    ["Vehicles", "/admin/vehicles", Car],
     ["Kanban Board", "/admin/jobs", ListChecks],
     ["Workers", "/admin/workers", Wrench],
     ["Receptionists", "/admin/receptionists", ShieldCheck],
@@ -39,7 +40,6 @@ const NAV: Record<Role, NavItem[]> = {
   RECEPTIONIST: [
     ["Dashboard", "/reception/dashboard", LayoutDashboard],
     ["Customers", "/reception/customers", Users],
-    ["Vehicles", "/reception/vehicles", Car],
     ["Kanban Board", "/reception/jobs", ListChecks],
     ["Service Rates", "/reception/service-rates", Tags],
     ["Payments", "/reception/payments", CreditCard],
@@ -55,13 +55,13 @@ const NAV: Record<Role, NavItem[]> = {
 };
 
 type SearchResults = {
-  customers: { id: string; name: string; phone: string; customerCode: string }[];
+  customers: { id: string; name: string; phone: string }[];
   vehicles: { id: string; registrationNumber: string; brand: string; model: string }[];
-  jobs: { id: string; serviceNumber: string; serviceType: string; status: string }[];
-  invoices: { id: string; invoiceNumber: string }[];
 };
 
-function GlobalSearch({ base, canSeeInvoices }: { base: string; canSeeInvoices: boolean }) {
+const SEARCH_HINT = "Search name, phone or vehicle number";
+
+function GlobalSearch({ base }: { base: string }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
 
@@ -77,8 +77,6 @@ function GlobalSearch({ base, canSeeInvoices }: { base: string; canSeeInvoices: 
     ? [
         ["Customers", results.customers.map((c) => ({ key: c.id, href: `${base}/customers/${c.id}`, label: `${c.name} · +${c.phone}` }))],
         ["Vehicles", results.vehicles.map((v) => ({ key: v.id, href: `${base}/vehicles/${v.id}`, label: `${v.registrationNumber} · ${v.brand} ${v.model}` }))],
-        ["Services", results.jobs.map((j) => ({ key: j.id, href: `${base}/jobs/${j.id}`, label: `${j.serviceNumber} · ${j.serviceType}` }))],
-        ["Invoices", results.invoices.map((i) => ({ key: i.id, href: canSeeInvoices ? `${base}/invoices/${i.id}` : `/api/invoices/${i.id}/pdf`, label: i.invoiceNumber }))],
       ]
     : [];
   const empty = results && groups.every(([, items]) => items.length === 0);
@@ -87,8 +85,8 @@ function GlobalSearch({ base, canSeeInvoices }: { base: string; canSeeInvoices: 
     <div className="relative w-full max-w-md">
       <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        aria-label="Search customers, vehicles, services, invoices"
-        placeholder="Search name, phone, TN38AB1234, SRV-…, INV-…"
+        aria-label={SEARCH_HINT}
+        placeholder={SEARCH_HINT}
         className="pl-8"
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -127,7 +125,8 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
     <nav className="flex h-full flex-col gap-1 p-3" aria-label="Main">
       <Logo name={garage} light className="mb-4 ml-1 text-sm text-sidebar-foreground" />
       {items.map(([label, href, Icon]) => {
-        const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`));
+        // A vehicle's detail page belongs to Customers now that the two share a page.
+        const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`)) || (href === `${base}/customers` && pathname.startsWith(`${base}/vehicles/`));
         return (
           <Link
             key={href}
@@ -149,6 +148,9 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
         <button onClick={logout} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-sidebar-accent">
           <LogOut className="size-4" /> Log out
         </button>
+        {role === "ADMIN" && (
+          <Link href="/admin/updates" onClick={() => setOpen(false)} className="mt-1 block rounded px-2.5 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:underline">v{LATEST_VERSION}</Link>
+        )}
       </div>
     </nav>
   );
@@ -168,13 +170,14 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2.5">
           <button aria-label="Open menu" className="p-1 lg:hidden" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
-          {role === "WORKER" ? <Logo name={garage} className="text-xs lg:hidden" logoClassName="h-6" /> : <GlobalSearch base={base} canSeeInvoices={role === "ADMIN"} />}
+          {role === "WORKER" ? <Logo name={garage} className="text-xs lg:hidden" logoClassName="h-6" /> : <GlobalSearch base={base} />}
           {role !== "WORKER" && (
             <div className="ml-auto shrink-0">
               <FormDialog trigger="+ Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />
             </div>
           )}
           <LiveRefresh className={role === "WORKER" ? "ml-auto" : undefined} />
+          <NotificationBell />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
       </div>

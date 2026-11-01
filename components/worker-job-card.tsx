@@ -46,7 +46,7 @@ export function WorkerActions({ jobId, status }: { jobId: string; status: Servic
   );
 }
 
-export function WorkerJobCard({ job, prices }: { job: Job; prices?: Record<string, number> }) {
+export function WorkerJobCard({ job, prices, parts }: { job: Job; prices?: Record<string, number>; parts?: string[] }) {
   const editable = canEditBill(job);
   return (
     <article className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
@@ -71,7 +71,7 @@ export function WorkerJobCard({ job, prices }: { job: Job; prices?: Record<strin
               <span className="min-w-0 break-words">{i.name}{Number(i.quantity) !== 1 && ` × ${Number(i.quantity)}`}<ApprovalBadge approval={i.approval} /></span>
               <span className="flex shrink-0 items-center gap-1 tabular-nums">
                 {money(i.total as number)}
-                {editable && <WorkItemDialog jobId={job.id} item={toWorkItem(i)} prices={prices} variant="ghost" triggerSize="icon-sm" triggerLabel={`Edit ${i.name}`} trigger={<Pencil className="size-3.5" />} />}
+                {editable && <WorkItemDialog jobId={job.id} item={toWorkItem(i)} prices={prices} parts={parts} variant="ghost" triggerSize="icon-sm" triggerLabel={`Edit ${i.name}`} trigger={<Pencil className="size-3.5" />} />}
               </span>
             </li>
           ))}
@@ -79,7 +79,7 @@ export function WorkerJobCard({ job, prices }: { job: Job; prices?: Record<strin
         {job.items.length > 0 && <p className="mt-1 border-t pt-1 text-right font-semibold">Approved total: {money(job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0))}</p>}
         {job.items.some((i) => i.approval === "PENDING") && <p className="text-right text-xs text-amber-800">Waiting for customer: {money(job.items.filter((i) => i.approval === "PENDING").reduce((sum, i) => sum + Number(i.total), 0))}</p>}
         {editable
-          ? <WorkItemDialog jobId={job.id} prices={prices} variant="outline" className="mt-2 w-full" trigger={<><Plus className="size-3.5" /> Edit work: add issue, service or part</>} />
+          ? <WorkItemDialog jobId={job.id} prices={prices} parts={parts} variant="outline" className="mt-2 w-full" trigger={<><Plus className="size-3.5" /> Edit work: add issue, service or part</>} />
           : <p className="mt-1 text-xs text-muted-foreground">Bill locked. Ask reception to change it.</p>}
       </div>
       <WorkerActions jobId={job.id} status={job.status} />

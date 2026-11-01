@@ -142,7 +142,6 @@ See [docs/API.md](docs/API.md).
 - **Not yet tested against live services:** Sendiee and Razorpay calls follow their docs but were tested against stand-ins. Stripe has unit-level signature tests only.
 - **Teambox assignment** is available by API (`POST /api/whatsapp/conversations/:customerId/teambox`), but the inbox UI only offers sync.
 - **Free-text intake:** a plain "I need a service" message is stored but doesn't create a job, because a job needs a registration number. The Sendiee AI assistant collects the details and posts them to the intake webhook.
-- **Invoice PDFs** show "Rs." because the built-in PDF fonts lack the ₹ glyph.
 
 ## Troubleshooting
 

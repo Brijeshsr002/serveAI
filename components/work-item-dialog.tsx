@@ -14,14 +14,14 @@ import { ISSUE_NAMES, PART_NAMES, WORK_NAMES } from "@/lib/work-catalog";
 type ItemType = "PART" | "LABOUR" | "SERVICE";
 export type WorkItem = { id: string; itemType: ItemType; name: string; quantity: number; unitPrice: number };
 
-const GROUPS: { title: string; type: ItemType; names: string[] }[] = [
+const groups = (parts: string[]): { title: string; type: ItemType; names: string[] }[] => [
   { title: "Issues found", type: "LABOUR", names: ISSUE_NAMES },
   { title: "Services", type: "SERVICE", names: WORK_NAMES },
-  { title: "Parts", type: "PART", names: PART_NAMES },
+  { title: "Parts", type: "PART", names: [...new Set([...PART_NAMES, ...parts])] },
 ];
 
 /** Tap a listed issue, service or part, or type your own, then enter the amount. */
-export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize = "sm", variant = "default", className, prices = {}, staff = false }: {
+export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize = "sm", variant = "default", className, prices = {}, parts = [], staff = false }: {
   jobId: string;
   item?: WorkItem;
   trigger: React.ReactNode;
@@ -29,8 +29,10 @@ export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize
   triggerSize?: "sm" | "lg" | "icon-sm";
   variant?: "default" | "outline" | "ghost";
   className?: string;
-  /** Name to amount, from the price list in Settings. */
+  /** Name to amount: approved rates, then the price list in Settings. */
   prices?: Record<string, number>;
+  /** Parts added in Service Types, on top of the built-in names. */
+  parts?: string[];
   /** Staff choose whether to ask the customer; a worker's work always asks. */
   staff?: boolean;
 }) {
@@ -90,7 +92,7 @@ export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize
             });
           }}
         >
-          {GROUPS.map((group) => (
+          {groups(parts).map((group) => (
             <details key={group.title} open={group.title === "Issues found"} className="rounded-lg border p-2 text-sm">
               <summary className="cursor-pointer font-medium">{group.title}</summary>
               <div className="mt-2 flex flex-wrap gap-1.5">

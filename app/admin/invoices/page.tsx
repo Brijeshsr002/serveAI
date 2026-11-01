@@ -1,9 +1,18 @@
+import { Download } from "lucide-react";
 import { DataBoard, isBoardView, ViewSwitch } from "@/components/data-board";
 import { PageHeader, PaymentBadge, Section, SimpleTable, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { date, money } from "@/lib/format";
 import { invoiceInclude, invoicePaymentStatus } from "@/lib/services/invoices";
+
+function DownloadLink({ id, number }: { id: string; number: string }) {
+  return (
+    <a href={`/api/invoices/${id}/pdf`} aria-label={`Download ${number}`} title={`Download ${number}`} className="inline-flex size-7 items-center justify-center rounded-md text-primary hover:bg-accent">
+      <Download className="size-3.5" />
+    </a>
+  );
+}
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   await requireRole(["ADMIN"]);
@@ -22,6 +31,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
       lines: [i.serviceJob.customer.name, <TextLink key="s" href={`/admin/jobs/${i.serviceJobId}`}>{i.serviceJob.serviceNumber}</TextLink>],
       left: date(i.invoiceDate),
       right: <strong>{money(i.total)}</strong>,
+      actions: <DownloadLink id={i.id} number={i.invoiceNumber} />,
     })),
   }));
   return (
@@ -29,7 +39,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
       <PageHeader title="Invoices"><ViewSwitch board={board} /></PageHeader>
       {board ? <DataBoard columns={columns} empty="No invoices" /> : <Section title="All invoices">
         <SimpleTable
-          headers={["Invoice", "Service", "Customer", "Total", "Payment", "Date"]}
+          headers={["Invoice", "Service", "Customer", "Total", "Payment", "Date", ""]}
           empty="No invoices yet. Generate one from a service job."
           rows={invoices.map((i) => [
             <TextLink key="i" href={`/admin/invoices/${i.id}`}>{i.invoiceNumber}</TextLink>,
@@ -38,6 +48,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             money(i.total),
             <PaymentBadge key="b" status={invoicePaymentStatus(i)} />,
             date(i.invoiceDate),
+            <DownloadLink key="d" id={i.id} number={i.invoiceNumber} />,
           ])}
         />
       </Section>}

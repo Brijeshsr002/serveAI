@@ -54,7 +54,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       : db.serviceJob.findMany({ where: listWhere, orderBy: { createdAt: "desc" }, take: 100, include: jobInclude }),
     board ? db.serviceJob.groupBy({ by: ["status"], where, _count: true }) : [],
     db.customer.findMany({ orderBy: { name: "asc" }, take: 500, include: { vehicles: true } }),
-    db.serviceType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    db.serviceType.findMany({ where: { active: true, kind: "SERVICE" }, orderBy: { name: "asc" } }),
     workersWithLoad(),
   ]);
   const counts = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]));
@@ -94,6 +94,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
             workerId: j.assignedWorkerId,
             workerName: j.assignedWorker?.name ?? null,
             estimate: money(j.estimatedAmount),
+            appointment: j.appointmentDate ? dateTime(j.appointmentDate) : null,
             edit: {
               customerComplaint: j.customerComplaint,
               internalNotes: j.internalNotes,

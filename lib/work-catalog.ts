@@ -16,7 +16,7 @@ export const WORK_NAMES = [
   "Suspension Repair", "Electrical Repair", "Denting", "Painting", "Scratch Removal", "Labour Charge", "Pickup and Drop",
 ];
 
-/** Starting prices in rupees. Garages set their own in Settings; these are only a first draft. */
+/** Starting prices in rupees, only a first draft. Approved rates in Service Types win; this list is the fallback in Settings. */
 export const DEFAULT_PRICE_LIST = `Car Wash = 300
 Foam Wash = 500
 Interior Cleaning = 800

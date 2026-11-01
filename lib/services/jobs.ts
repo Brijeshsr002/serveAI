@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { Prisma, Priority, ServiceStatus } from "@prisma/client";
 import { z } from "zod";
-import { logActivity } from "@/lib/activity";
+import { logActivity, SYSTEM_ACTOR } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import type { SessionUser } from "@/lib/auth/session";
 import { db, nextServiceNumber } from "@/lib/db";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "@/lib/errors";
+import { dayKeyToDate, istDayKey } from "@/lib/format";
 import { loadJobContext, NotificationService } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
 import { generateInvoiceIfNeeded } from "@/lib/services/invoices";
@@ -100,7 +101,7 @@ export async function createJob(actor: Actor, input: JobCreate, externalRef?: st
 
   if (notifyCustomer) await NotificationService.sendServiceRequestReceived(await loadJobContext(job.id));
   if (assignedWorkerId) return assignWorker(actor, job.id, assignedWorkerId);
-  return job;
+  return (await autoAssignNewJob(job)) ?? job;
 }
 
 export async function updateJob(actor: Actor, id: string, input: z.output<typeof jobPatchSchema>) {
@@ -114,7 +115,8 @@ export async function updateJob(actor: Actor, id: string, input: z.output<typeof
   return job;
 }
 
-export async function assignWorker(actor: Actor, jobId: string, workerId: string) {
+/** `silent` keeps the customer out of it; `reason` goes on the logged move. */
+export async function assignWorker(actor: Actor, jobId: string, workerId: string, opts: { silent?: boolean; reason?: string } = {}) {
   const worker = await db.user.findUnique({ where: { id: workerId }, select: { id: true, name: true, role: true, active: true } });
   if (!worker || worker.role !== "WORKER" || !worker.active) {
     throw badRequest("INVALID_WORKER", "Select an active worker");
@@ -148,7 +150,7 @@ export async function assignWorker(actor: Actor, jobId: string, workerId: string
         action: job.assignedWorkerId ? "SERVICE_REASSIGNED" : "SERVICE_ASSIGNED",
         entityType: "ServiceJob",
         entityId: jobId,
-        summary: `${actor.name} ${job.assignedWorkerId ? "reassigned" : "assigned"} ${job.serviceNumber} to ${worker.name}`,
+        summary: `${actor.name} ${job.assignedWorkerId ? "reassigned" : "assigned"} ${job.serviceNumber} to ${worker.name}${opts.reason ? ` (${opts.reason})` : ""}`,
         metadata: { workerId, previousWorkerId: job.assignedWorkerId },
       },
       tx,
@@ -156,7 +158,7 @@ export async function assignWorker(actor: Actor, jobId: string, workerId: string
     return result;
   });
 
-  if (firstAssignment) {
+  if (firstAssignment && !opts.silent) {
     await NotificationService.sendServiceStatusUpdate(await loadJobContext(jobId), "ASSIGNED");
   }
   return updated;
@@ -282,8 +284,9 @@ export function hideFromWorker<T extends { trackingToken: string; payments?: { p
   return { ...rest, ...(job.payments ? { payments: job.payments.map((p) => ({ ...p, paymentLink: null })) } : {}) };
 }
 
-/** Workers with their current load, for the assign dropdown. */
+/** Workers with their current load and today's leave, for the assign dropdown. */
 export async function workersWithLoad() {
+  const today = dayKeyToDate(istDayKey(new Date()));
   const workers = await db.user.findMany({
     where: { role: "WORKER", active: true },
     orderBy: { name: "asc" },
@@ -291,7 +294,71 @@ export async function workersWithLoad() {
       id: true,
       name: true,
       _count: { select: { assignedJobs: { where: { status: { in: ACTIVE_STATUSES } } } } },
+      attendance: { where: { date: today, status: "LEAVE" }, select: { id: true } },
     },
   });
-  return workers.map((w) => ({ id: w.id, name: w.name, activeJobs: w._count.assignedJobs }));
+  return workers.map((w) => ({ id: w.id, name: w.name, activeJobs: w._count.assignedJobs, onLeave: w.attendance.length > 0 }));
+}
+
+const AUTO_ACTOR: Actor = { ...SYSTEM_ACTOR, name: "Auto-assign" };
+
+const autoAssignOn = async () => (await db.setting.findUnique({ where: { key: "auto_assign_enabled" } }))?.value === "true";
+
+/** Who can take work now: fewest active jobs first, then by name so ties always go the same way. */
+const availableWorkers = async () =>
+  (await workersWithLoad())
+    .filter((w) => !w.onLeave)
+    .sort((a, b) => a.activeJobs - b.activeJobs || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+/** A failure here must not lose the job that was just created, so it only logs. Returns null when nothing was assigned. */
+async function autoAssignNewJob(job: { id: string; serviceNumber: string }) {
+  try {
+    if (!(await autoAssignOn())) return null;
+    const [next] = await availableWorkers();
+    if (next) return await assignWorker(AUTO_ACTOR, job.id, next.id);
+    await logActivity(AUTO_ACTOR, {
+      action: "AUTO_ASSIGN_SKIPPED",
+      entityType: "ServiceJob",
+      entityId: job.id,
+      summary: `No worker is available today, so ${job.serviceNumber} was left unassigned`,
+    });
+  } catch (err) {
+    console.error("Auto-assign failed:", (err as Error).message);
+  }
+  return null;
+}
+
+/** Moves a worker's open jobs one at a time to whoever has the fewest. Customers aren't told about a reassignment. */
+export async function redistributeLeave(worker: { id: string; name: string }) {
+  if (!(await autoAssignOn())) return;
+  const jobs = await db.serviceJob.findMany({
+    where: { assignedWorkerId: worker.id, status: { in: ACTIVE_STATUSES } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, serviceNumber: true },
+  });
+  if (jobs.length === 0) return;
+  const pool = await availableWorkers();
+  if (pool.length === 0) {
+    await logActivity(AUTO_ACTOR, {
+      action: "AUTO_ASSIGN_SKIPPED",
+      entityType: "User",
+      entityId: worker.id,
+      summary: `${worker.name} is on leave and no other worker is available, so ${jobs.length} job${jobs.length === 1 ? "" : "s"} stayed with them`,
+    });
+    return;
+  }
+  for (const job of jobs) {
+    const next = pool.reduce((least, w) => (w.activeJobs < least.activeJobs ? w : least));
+    try {
+      await assignWorker(AUTO_ACTOR, job.id, next.id, { silent: true, reason: `${worker.name} is on leave` });
+      next.activeJobs++;
+    } catch (err) {
+      await logActivity(AUTO_ACTOR, {
+        action: "AUTO_ASSIGN_FAILED",
+        entityType: "ServiceJob",
+        entityId: job.id,
+        summary: `Couldn't move ${job.serviceNumber} off ${worker.name}: ${(err as Error).message}`,
+      });
+    }
+  }
 }

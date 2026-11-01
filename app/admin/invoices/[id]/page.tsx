@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/actions";
 import { Field, PageHeader, PaymentBadge, Section, SimpleTable } from "@/components/ui-kit";
@@ -16,7 +17,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   return (
     <>
       <PageHeader title={invoice.invoiceNumber} subtitle={date(invoice.invoiceDate)}>
-        <a className={buttonVariants({ variant: "outline", size: "sm" })} href={`/api/invoices/${invoice.id}/pdf`}>Download PDF</a>
+        <a className={buttonVariants({ variant: "outline", size: "sm" })} href={`/api/invoices/${invoice.id}/pdf`}><Download className="mr-1 inline size-3.5" />Download PDF</a>
         <ActionButton label="Send on WhatsApp" endpoint={`/api/invoices/${invoice.id}/send`} success="Invoice sent" />
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-3">

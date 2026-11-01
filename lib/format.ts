@@ -29,6 +29,10 @@ export function time(d: Date | string) {
   return new Intl.DateTimeFormat("en-IN", { timeStyle: "short", timeZone: TZ }).format(new Date(d));
 }
 
+/** Assign dropdown text. Someone on leave can still be picked by hand, so the list says so. */
+export const workerLoadLabel = (w: { name: string; activeJobs: number; onLeave?: boolean }) =>
+  w.onLeave ? `${w.name} (on leave)` : `${w.name} (${w.activeJobs} active)`;
+
 /** Start of the given day in IST, as a UTC instant. The workshop's "today" is an IST day. */
 export function startOfDayIST(d = new Date()) {
   const shifted = new Date(d.getTime() + IST_OFFSET_MS);

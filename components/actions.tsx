@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client";
+import { workerLoadLabel } from "@/lib/format";
 
 export const SELECT_CLASS =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -189,7 +190,7 @@ export function CopyButton({ text, label = "Copy link" }: { text: string; label?
   );
 }
 
-export function AssignControl({ jobId, workers, current }: { jobId: string; workers: { id: string; name: string; activeJobs: number }[]; current: string | null }) {
+export function AssignControl({ jobId, workers, current }: { jobId: string; workers: { id: string; name: string; activeJobs: number; onLeave?: boolean }[]; current: string | null }) {
   const router = useRouter();
   const [workerId, setWorkerId] = useState(current ?? "");
   const [busy, setBusy] = useState(false);
@@ -208,9 +209,9 @@ export function AssignControl({ jobId, workers, current }: { jobId: string; work
   return (
     <div className="flex gap-2">
       <select aria-label="Assign worker" className={SELECT_CLASS} value={workerId} onChange={(e) => setWorkerId(e.target.value)}>
-        <option value="">Select worker…</option>
+        <option value="">{workers.length ? "Select worker…" : "No active workers"}</option>
         {workers.map((w) => (
-          <option key={w.id} value={w.id}>{w.name} — {w.activeJobs} active job{w.activeJobs === 1 ? "" : "s"}</option>
+          <option key={w.id} value={w.id}>{workerLoadLabel(w)}</option>
         ))}
       </select>
       <Button size="sm" disabled={busy || !workerId || workerId === current} onClick={assign}>{current ? "Reassign" : "Assign"}</Button>

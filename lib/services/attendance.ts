@@ -4,6 +4,7 @@ import { logActivity } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import { db, isUniqueViolation } from "@/lib/db";
 import { badRequest, conflict, notFound } from "@/lib/errors";
+import { redistributeLeave } from "@/lib/services/jobs";
 import { addDayKey, dateToDayKey, dayKeyToDate, isDayKey, istDayKey, istMonthKey, lastDayOfMonth, time } from "@/lib/format";
 
 export const ATTENDANCE_ROLES: Role[] = ["WORKER", "RECEPTIONIST"];
@@ -297,5 +298,9 @@ export async function setAttendance(actor: Actor, input: z.output<typeof markSch
     summary: `${actor.name} marked ${person.name} ${action === "leave" ? "on leave" : "present"} for ${date}`,
     metadata: { date, status: row.status, hasNote: Boolean(note) },
   });
+  // Only today's leave moves work. The leave is already saved, so a failure here can't undo it.
+  if (action === "leave" && date === today && person.role === "WORKER") {
+    await redistributeLeave(person).catch((err) => console.error("Leave redistribution failed:", (err as Error).message));
+  }
   return row;
 }

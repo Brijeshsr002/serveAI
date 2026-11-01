@@ -9,6 +9,8 @@ const BASE_DEFAULTS = {
   center_name: "Car's Spa",
   center_phone: "",
   center_address: "",
+  center_email: "",
+  auto_assign_enabled: "false",
   whatsapp_commands_enabled: "true",
   // Meta-approved template names, used outside the 24-hour window. Blank = skip when the window is closed.
   template_status_update: "serveai_service_update",

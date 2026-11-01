@@ -1,5 +1,8 @@
+import type { Prisma, ServiceStatus } from "@prisma/client";
+import { z } from "zod";
 import { db } from "@/lib/db";
-import { addDays, istDayKey, istMonthKey, startOfDayIST, toNumber } from "@/lib/format";
+import { notFound } from "@/lib/errors";
+import { addDayKey, addDays, dateTime, isDayKey, istDayKey, istMonthKey, money, monthRangeIST, startOfDayIST, toNumber } from "@/lib/format";
 import { ACTIVE_STATUSES, STATUS_LABEL, STATUSES } from "@/lib/status";
 
 export async function dashboardStats() {
@@ -34,7 +37,8 @@ const dayFormat = (options: Intl.DateTimeFormatOptions, key: string) =>
 export async function chartData() {
   const today = startOfDayIST();
   const dailyStart = addDays(today, -13);
-  const monthlyStart = addDays(today, -365);
+  // From the first of the month, so the oldest bar is a whole month and matches its drilldown.
+  const monthlyStart = monthRangeIST(istMonthKey(addDays(today, -365))).start;
 
   const [byStatus, byType, paid, performance, workers] = await Promise.all([
     db.serviceJob.groupBy({ by: ["status"], _count: true }),
@@ -59,17 +63,20 @@ export async function chartData() {
     byStatus: STATUSES.map((s) => ({
       name: STATUS_LABEL[s],
       status: s,
+      key: s,
       value: byStatus.find((b) => b.status === s)?._count ?? 0,
     })),
-    byType: byType.map((t) => ({ name: t.serviceType, value: t._count })),
+    byType: byType.map((t) => ({ name: t.serviceType, key: t.serviceType, value: t._count })),
     dailyRevenue: [...daily].map(([day, paise]) => ({
       name: dayFormat({ day: "numeric", month: "short" }, day),
       full: dayFormat({ weekday: "short", day: "numeric", month: "long", year: "numeric" }, day),
+      key: day,
       value: paise / 100,
     })),
     monthlyRevenue: [...monthly].sort(([a], [b]) => a.localeCompare(b)).map(([month, paise]) => ({
       name: dayFormat({ month: "short", year: "numeric" }, `${month}-15`),
       full: dayFormat({ month: "long", year: "numeric" }, `${month}-15`),
+      key: month,
       value: paise / 100,
     })),
     workerPerformance: workers.map((w) => {
@@ -77,12 +84,117 @@ export async function chartData() {
       const count = (pred: (s: (typeof rows)[number]) => boolean) => rows.filter(pred).reduce((n, r) => n + r._count, 0);
       return {
         name: w.name,
+        key: w.id,
         completed: count((r) => r.status === "COMPLETED"),
         active: count((r) => ACTIVE_STATUSES.includes(r.status)),
       };
     }),
   };
 }
+
+const WORKER_BUCKETS = {
+  completed: { label: "completed jobs", where: { status: "COMPLETED" } },
+  active: { label: "active jobs", where: { status: { in: ACTIVE_STATUSES } } },
+  all: { label: "jobs", where: {} },
+} satisfies Record<string, { label: string; where: Prisma.ServiceJobWhereInput }>;
+
+/** What one chart bar or row stands for. */
+export const drilldownSchema = z
+  .object({
+    kind: z.enum(["status", "type", "day", "month", "worker"]),
+    value: z.string().trim().min(1).max(120),
+    bucket: z.enum(["all", "completed", "active"]).default("all"),
+  })
+  .superRefine(({ kind, value }, ctx) => {
+    const valid = kind === "status" ? STATUSES.includes(value as ServiceStatus) : kind === "day" ? isDayKey(value) : kind === "month" ? /^\d{4}-(0[1-9]|1[0-2])$/.test(value) : true;
+    if (!valid) ctx.addIssue({ code: "custom", path: ["value"], message: `Not a valid ${kind}` });
+  });
+
+const DRILLDOWN_LIMIT = 500;
+
+/** Counts and totals come from the same filters as chartData over every matching row, so they equal the bar even when the list is capped. */
+export async function drilldown({ kind, value, bucket }: z.output<typeof drilldownSchema>) {
+  if (kind === "day" || kind === "month") {
+    const range = kind === "day" ? { start: new Date(`${value}T00:00:00+05:30`), end: new Date(`${addDayKey(value, 1)}T00:00:00+05:30`) } : monthRangeIST(value);
+    const where: Prisma.PaymentWhereInput = { status: "PAID", paidAt: { gte: range.start, lt: range.end } };
+    const [rows, totals] = await Promise.all([
+      db.payment.findMany({
+        where,
+        orderBy: { paidAt: "asc" },
+        take: DRILLDOWN_LIMIT,
+        include: { customer: { select: { name: true, phone: true } }, serviceJob: { select: { id: true, serviceNumber: true, serviceType: true } } },
+      }),
+      db.payment.aggregate({ where, _count: true, _sum: { amount: true } }),
+    ]);
+    const total = toNumber(totals._sum.amount);
+    return {
+      type: "payments" as const,
+      title: `Revenue for ${kind === "day" ? dayFormat({ weekday: "short", day: "numeric", month: "long", year: "numeric" }, value) : dayFormat({ month: "long", year: "numeric" }, `${value}-15`)}`,
+      count: totals._count,
+      total,
+      totalLabel: money(total),
+      rows: rows.map((p) => ({
+        id: p.id,
+        jobId: p.serviceJob.id,
+        serviceNumber: p.serviceJob.serviceNumber,
+        serviceType: p.serviceJob.serviceType,
+        customerName: p.customer.name,
+        phone: p.customer.phone,
+        amount: money(p.amount),
+        provider: p.paymentProvider,
+        paidAt: dateTime(p.paidAt),
+      })),
+    };
+  }
+
+  let title: string;
+  let where: Prisma.ServiceJobWhereInput;
+  if (kind === "status") {
+    title = `${STATUS_LABEL[value as ServiceStatus]} services`;
+    where = { status: value as ServiceStatus };
+  } else if (kind === "type") {
+    title = `${value} services`;
+    where = { serviceType: value };
+  } else {
+    const worker = await db.user.findFirst({ where: { id: value, role: "WORKER" }, select: { name: true } });
+    if (!worker) throw notFound("WORKER_NOT_FOUND", "Worker not found");
+    title = `${worker.name}'s ${WORKER_BUCKETS[bucket].label}`;
+    where = { assignedWorkerId: value, ...WORKER_BUCKETS[bucket].where };
+  }
+  const [rows, count] = await Promise.all([
+    db.serviceJob.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: DRILLDOWN_LIMIT,
+      include: {
+        customer: { select: { name: true, phone: true } },
+        vehicle: { select: { registrationNumber: true, brand: true, model: true } },
+        assignedWorker: { select: { name: true } },
+      },
+    }),
+    db.serviceJob.count({ where }),
+  ]);
+  return {
+    type: "jobs" as const,
+    title,
+    count,
+    rows: rows.map((j) => ({
+      id: j.id,
+      serviceNumber: j.serviceNumber,
+      serviceType: j.serviceType,
+      status: j.status,
+      customerName: j.customer.name,
+      phone: j.customer.phone,
+      registrationNumber: j.vehicle.registrationNumber,
+      vehicleName: `${j.vehicle.brand} ${j.vehicle.model}`,
+      workerName: j.assignedWorker?.name ?? null,
+      amount: money(j.finalAmount ?? j.estimatedAmount),
+      created: dateTime(j.createdAt),
+    })),
+  };
+}
+
+export type Drilldown = Awaited<ReturnType<typeof drilldown>>;
 
 export async function reportSummary() {
   const today = startOfDayIST();

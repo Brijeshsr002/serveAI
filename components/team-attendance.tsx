@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const DOT: Record<DayStatus, string> = {
   PRESENT: "bg-green-500",
-  LEAVE: "bg-amber-500",
+  LEAVE: "bg-[#F7C96B]",
   ABSENT: "bg-red-500",
   NONE: "bg-slate-300",
 };

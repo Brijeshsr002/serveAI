@@ -180,9 +180,14 @@ Salary and staff notes are only read and written through `/api/users/:id/profile
 | PATCH | `/api/users/:id` | Admin | Any of those, plus `active` | 400 `CANNOT_CHANGE_SELF`, 409 `WORKER_HAS_ACTIVE_JOBS` |
 | DELETE | `/api/users/:id` | Admin | Deactivates the user | 400 `CANNOT_CHANGE_SELF`, 409 `WORKER_HAS_ACTIVE_JOBS` |
 | POST | `/api/profile/password` | All | `currentPassword`*, `newPassword`* | 400 `WRONG_PASSWORD` |
-| GET, POST | `/api/service-types` | GET Staff, POST Admin | `name`*, `description` | 409 `DUPLICATE_SERVICE_TYPE` |
+| GET | `/api/service-types` | Staff | `?kind=PART` or `ALL`; services only by default | |
+| POST | `/api/service-types` | All | `name`*, `description`, `kind` (`SERVICE` or `PART`), `rate`. Only admins add services; anyone else's part needs a `rate`, which waits for approval | 403, 400 `RATE_REQUIRED`, 409 `DUPLICATE_SERVICE_TYPE` |
 | PATCH | `/api/service-types/:id` | Admin | `name`, `description`, `active` | |
 | GET, PATCH | `/api/settings` | Admin | Key-value pairs of known setting keys | |
-| GET | `/api/search` | Staff | `?q=` returns `customers`, `vehicles`, `jobs`, `invoices` | |
+| GET | `/api/search` | Staff | `?q=` matches name, phone or vehicle number; returns `customers`, `vehicles` | |
+| GET | `/api/customers/:id/overview` | Staff | The whole record for the view dialog, as plain values | 404 `CUSTOMER_NOT_FOUND` |
+| GET | `/api/reports/drilldown` | Admin | `?kind=status`, `type`, `day`, `month` or `worker`, `value`*, and `bucket=completed` or `active` for a worker. Returns the records behind a chart bar | 400, 404 `WORKER_NOT_FOUND` |
+| GET | `/api/notifications` | All | Your own latest 20, and the unread count | |
+| POST | `/api/notifications/read` | All | `ids`, or nothing for all. Only ever touches your own | |
 | GET | `/api/reports/export` | Admin | `?type=services`, `payments` or `workers` returns CSV | 400 `UNKNOWN_REPORT` |
 | GET | `/api/activity-logs` | Admin | Latest 200 | |

@@ -116,6 +116,11 @@
 }
 
 @layer base {
+  /* Native dropdown lists don't inherit the theme, so spell it out to keep worker names and the like readable. */
+  option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
   * {
     @apply border-border outline-ring/50;
     }

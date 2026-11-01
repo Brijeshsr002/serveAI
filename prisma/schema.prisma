@@ -74,6 +74,11 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum ServiceTypeKind {
+  SERVICE
+  PART
+}
+
 enum AttendanceStatus {
   PRESENT
   LEAVE
@@ -104,6 +109,8 @@ model User {
   createdJobs    ServiceJob[]    @relation("CreatedBy")
   statusChanges  ServiceStatusHistory[]
   activityLogs   ActivityLog[]
+  ratesProposed  ServiceType[]   @relation("RateProposer")
+  staffNotifications StaffNotification[]
 
   @@index([role, active])
   @@map("users")
@@ -202,15 +209,22 @@ model ServiceType {
   name        String   @unique
   description String?
   active      Boolean  @default(true)
+  /// SERVICE can be a job's service type and is offered for booking. PART is only priced for the bill.
+  kind        ServiceTypeKind @default(SERVICE)
   /// Default price for enquiries and new jobs. Blank means no set price.
   rate         Decimal?  @db.Decimal(12, 2)
   /// A rate change from reception or a worker, waiting for an admin.
   proposedRate Decimal?  @map("proposed_rate") @db.Decimal(12, 2)
   proposedBy   String?   @map("proposed_by")
+  /// Who to tell if the request is rejected.
+  proposedById String?   @map("proposed_by_id")
   proposedAt   DateTime? @map("proposed_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  proposer User? @relation("RateProposer", fields: [proposedById], references: [id], onDelete: SetNull)
+
+  @@index([kind, active])
   @@map("service_types")
 }
 
@@ -417,6 +431,22 @@ model Notification {
   @@index([serviceJobId])
   @@index([createdAt])
   @@map("notifications")
+}
+
+/// In-app messages to staff, separate from Notification, which logs WhatsApp messages to customers.
+model StaffNotification {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("staff_notifications")
 }
 
 model ActivityLog {

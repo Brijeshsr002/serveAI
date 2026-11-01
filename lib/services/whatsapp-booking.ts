@@ -58,7 +58,7 @@ async function offerSlots(customer: Customer, settings: Settings, vehicleId: str
 }
 
 async function offerServices(customer: Customer, settings: Settings, vehicleId: string) {
-  const types = await db.serviceType.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 20 });
+  const types = await db.serviceType.findMany({ where: { active: true, kind: "SERVICE" }, orderBy: { name: "asc" }, take: 20 });
   if (types.length === 0) return offerSlots(customer, settings, vehicleId, "General Service");
   const names = types.map((t) => t.name);
   const labels = types.map((t) => (t.rate ? `${t.name}: ${rupees(t.rate)}` : t.name));

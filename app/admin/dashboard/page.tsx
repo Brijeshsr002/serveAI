@@ -38,7 +38,7 @@ export default async function DashboardPage() {
         <StatCard tone="border-t-blue-600" label="Active Services" value={stats.activeServices} />
         <StatCard tone="border-t-green-600" label="Completed Today" value={stats.completedToday} />
         <StatCard tone="border-t-violet-500" label="Vehicles in Service" value={stats.vehiclesInService} />
-        <StatCard tone="border-t-amber-500" label="Pending Payments" value={stats.pendingPayments} hint={money(stats.pendingAmount)} />
+        <StatCard tone="border-t-[#F7C96B]" label="Pending Payments" value={stats.pendingPayments} hint={money(stats.pendingAmount)} />
         {isAdmin && <StatCard tone="border-t-teal-600" label="Revenue" value={money(stats.revenue)} />}
       </div>
       <div className={cn("mb-6 grid grid-cols-1 items-start gap-4", isAdmin && "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]")}>
@@ -69,11 +69,11 @@ async function AdminPanels() {
   ]);
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Section title="Services by status"><SingleBarChart data={charts.byStatus} label="Services" horizontal /></Section>
-      <Section title="Service type distribution"><SingleBarChart data={charts.byType} label="Services" horizontal /></Section>
-      <Section title="Daily revenue (last 14 days)"><SingleBarChart data={charts.dailyRevenue} label="Revenue" currency /></Section>
-      <Section title="Monthly revenue"><SingleBarChart data={charts.monthlyRevenue} label="Revenue" currency /></Section>
-      <Section title="Worker performance"><WorkerChart data={charts.workerPerformance} /></Section>
+      <Section title="Services by status"><SingleBarChart data={charts.byStatus} label="Services" horizontal drill="status" /></Section>
+      <Section title="Service type distribution"><SingleBarChart data={charts.byType} label="Services" horizontal drill="type" /></Section>
+      <Section title="Daily revenue (last 14 days)"><SingleBarChart data={charts.dailyRevenue} label="Revenue" currency drill="day" /></Section>
+      <Section title="Monthly revenue"><SingleBarChart data={charts.monthlyRevenue} label="Revenue" currency drill="month" /></Section>
+      <Section title="Worker performance"><WorkerChart data={charts.workerPerformance} drill /></Section>
       <Section title="Recent activity">
         <ul className="space-y-2 text-sm">
           {activity.map((a) => (

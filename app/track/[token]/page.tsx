@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ServiceStatus } from "@prisma/client";
 import { notFound } from "next/navigation";
-import { Check, Phone } from "lucide-react";
+import { Check, Download, Phone } from "lucide-react";
 import { ActionButton } from "@/components/actions";
 import { LiveScene } from "@/components/live-scene";
 import { CLIPS } from "@/lib/media-clips";
@@ -128,7 +128,7 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
           <ActionButton label="Pay now" size="lg" className="w-full" endpoint={`/api/track/${token}/pay`} openKey="paymentLink" />
         )}
         {view.hasInvoice && (
-          <a className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full")} href={`/api/track/${token}/invoice`}>View invoice</a>
+          <a className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full")} href={`/api/track/${token}/invoice`}><Download className="mr-2 size-4" /> Download invoice</a>
         )}
       </section>
 

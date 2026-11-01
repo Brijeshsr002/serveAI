@@ -1,7 +1,7 @@
 "use client";
 
 import type { Priority, ServiceStatus } from "@prisma/client";
-import { Pencil } from "lucide-react";
+import { CalendarClock, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { jobEditFields } from "@/components/forms-config";
 import { TextLink } from "@/components/ui-kit";
 import { VoiceStatus } from "@/components/voice-status";
 import { api } from "@/lib/client";
+import { workerLoadLabel } from "@/lib/format";
 import { boardTargets, isTerminal, STATUS_COLOR, STATUS_LABEL, STATUSES } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,8 @@ export type BoardJob = {
   workerId: string | null;
   workerName: string | null;
   estimate: string;
+  /** Booked time, already formatted on the server so it can't differ between server and browser. */
+  appointment: string | null;
   /** The values the edit form starts from. */
   edit: {
     customerComplaint: string | null;
@@ -45,7 +48,7 @@ export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
   /** Totals per status, which can exceed the cards loaded. */
   counts: Partial<Record<ServiceStatus, number>>;
   base: string;
-  workers: { id: string; name: string; activeJobs: number }[];
+  workers: { id: string; name: string; activeJobs: number; onLeave: boolean }[];
   serviceTypes: string[];
 }) {
   const router = useRouter();
@@ -164,6 +167,11 @@ export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
                     onDragStart={(e) => {
                       // The edit form is a portal, so its events bubble here too. Only drags from the card itself count.
                       if (!e.currentTarget.contains(e.target as Node)) return;
+                      // Some browsers start a card drag from a dropdown instead of opening it.
+                      if ((e.target as Element).closest?.("select, input, textarea, button")) {
+                        e.preventDefault();
+                        return;
+                      }
                       e.dataTransfer.setData("text/plain", job.serviceNumber);
                       e.dataTransfer.effectAllowed = "move";
                       setDragging(job);
@@ -197,8 +205,14 @@ export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
                     <p className="font-medium break-words">{job.customerName}</p>
                     <p className="text-xs break-words text-muted-foreground">{job.registrationNumber} · {job.vehicleName}</p>
                     <p className="text-xs break-words text-muted-foreground">{job.serviceType}</p>
+                    {job.appointment && <p className="flex items-center gap-1 text-xs font-medium text-primary"><CalendarClock aria-hidden className="size-3 shrink-0" />Booked {job.appointment}</p>}
                     <div className="flex items-center justify-between gap-2 text-xs">
-                      {job.workerName ? <span className="min-w-0 truncate">{job.workerName}</span> : <span className="text-amber-700">Unassigned</span>}
+                      <span className="flex min-w-0 items-center gap-1">
+                        {job.workerName ? <span className="min-w-0 truncate">{job.workerName}</span> : <span className="text-amber-700">Unassigned</span>}
+                        {!isTerminal(job.status) && workers.some((w) => w.id === job.workerId && w.onLeave) && (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.7rem] font-medium text-amber-800">On leave</span>
+                        )}
+                      </span>
                       <span className="shrink-0 tabular-nums">{job.estimate}</span>
                     </div>
                     {targets.length > 0 && <VoiceStatus compact jobId={job.id} options={targets.filter((t) => t !== "CANCELLED")} />}
@@ -209,9 +223,9 @@ export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
                         value={job.workerId ?? ""}
                         onChange={(e) => void assign(job, e.target.value)}
                       >
-                        {!job.workerId && <option value="">Assign worker…</option>}
+                        {!job.workerId && <option value="">{workers.length ? "Assign worker…" : "No active workers"}</option>}
                         {job.workerId && !workers.some((w) => w.id === job.workerId) && <option value={job.workerId}>{job.workerName}</option>}
-                        {workers.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.activeJobs} active)</option>)}
+                        {workers.map((w) => <option key={w.id} value={w.id}>{workerLoadLabel(w)}</option>)}
                       </select>
                     )}
                     {targets.length > 0 && (

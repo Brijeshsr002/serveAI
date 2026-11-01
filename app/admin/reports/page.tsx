@@ -29,10 +29,10 @@ export default async function ReportsPage() {
         <StatCard label="Repeat customers" value={s.repeatCustomers} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Daily revenue (last 14 days)"><SingleBarChart data={charts.dailyRevenue} label="Revenue" currency /></Section>
-        <Section title="Monthly revenue"><SingleBarChart data={charts.monthlyRevenue} label="Revenue" currency /></Section>
-        <Section title="Most common service types"><SingleBarChart data={charts.byType} label="Services" horizontal /></Section>
-        <Section title="Worker performance"><WorkerChart data={charts.workerPerformance} /></Section>
+        <Section title="Daily revenue (last 14 days)"><SingleBarChart data={charts.dailyRevenue} label="Revenue" currency drill="day" /></Section>
+        <Section title="Monthly revenue"><SingleBarChart data={charts.monthlyRevenue} label="Revenue" currency drill="month" /></Section>
+        <Section title="Most common service types"><SingleBarChart data={charts.byType} label="Services" horizontal drill="type" /></Section>
+        <Section title="Worker performance"><WorkerChart data={charts.workerPerformance} drill /></Section>
       </div>
     </>
   );

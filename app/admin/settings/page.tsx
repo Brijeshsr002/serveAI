@@ -20,12 +20,18 @@ export default async function SettingsPage() {
               { key: "center_name", label: "Garage name" },
               { key: "center_phone", label: "Contact phone" },
               { key: "center_address", label: "Address" },
+              { key: "center_email", label: "Contact email" },
             ],
           },
           {
             title: "Price list",
-            hint: "One per line, like Car Wash = 300. Tapping one of these fills in its amount, and anyone can still change it before saving.",
+            hint: "A fallback only: approved rates in Service Types come first. One per line, like Car Wash = 300, for anything without a rate there.",
             fields: [{ key: "price_list", label: "Prices (₹)", long: true }],
+          },
+          {
+            title: "Automatic assignment",
+            hint: "When on, marking a worker on leave for today moves their open jobs to workers who are in, fewest active jobs first, and new jobs without a worker are assigned the same way. Customers aren't told about a move.",
+            fields: [{ key: "auto_assign_enabled", label: "Assign and reassign jobs automatically", toggle: true }],
           },
           {
             title: "WhatsApp automation",

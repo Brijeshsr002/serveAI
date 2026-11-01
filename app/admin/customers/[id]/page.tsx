@@ -26,7 +26,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <PageHeader title={customer.name} subtitle={customer.customerCode}>
-        <FormDialog trigger="Add vehicle" title="Add vehicle" variant="outline" endpoint="/api/vehicles" fields={[{ name: "customerId", label: "Customer", type: "select", options: [{ value: customer.id, label: customer.name }] }, ...vehicleFields]} success="Vehicle added" />
+        <FormDialog trigger="+ Add vehicle" title="Add vehicle" variant="outline" endpoint="/api/vehicles" fields={[{ name: "customerId", label: "Customer", type: "select", options: [{ value: customer.id, label: customer.name }] }, ...vehicleFields]} success="Vehicle added" />
         <FormDialog trigger="Edit" title="Edit customer" variant="outline" method="PATCH" endpoint={`/api/customers/${customer.id}`} fields={customerFields} initial={{ name: customer.name, phone: `+${customer.phone}`, email: customer.email, address: customer.address, city: customer.city, notes: customer.notes }} />
         {user.role === "ADMIN" && <ActionButton label="Delete" variant="destructive" method="DELETE" endpoint={`/api/customers/${customer.id}`} confirm={`Delete ${customer.name}? This cannot be undone.`} success="Customer deleted" />}
       </PageHeader>

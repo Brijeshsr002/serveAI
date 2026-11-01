@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import { ActionButton, AssignControl, CopyButton, FormDialog } from "@/components/actions";
 import { itemFields, jobEditFields } from "@/components/forms-config";
 import { ApprovalBadge, Field, PageHeader, PaymentBadge, Section, SimpleTable, StatusBadge, TextLink } from "@/components/ui-kit";
@@ -6,7 +7,7 @@ import { db } from "@/lib/db";
 import { dateTime, money, time } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { getJobForUser, workersWithLoad } from "@/lib/services/jobs";
-import { billPrices } from "@/lib/services/service-rates";
+import { activePartNames, billPrices } from "@/lib/services/service-rates";
 import { trackingUrl } from "@/lib/settings";
 import { WorkItemDialog } from "@/components/work-item-dialog";
 import { boardTargets, isTerminal, STATUS_LABEL, STATUSES } from "@/lib/status";
@@ -31,6 +32,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   const itemsTotal = job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0);
   const closed = isTerminal(job.status);
   const prices = await billPrices();
+  const parts = await activePartNames();
 
   return (
     <>
@@ -76,7 +78,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
           <Section
             title="Service items"
-            action={!paid && <WorkItemDialog staff jobId={job.id} prices={prices} variant="outline" trigger="Add item" />}
+            action={!paid && <WorkItemDialog staff jobId={job.id} prices={prices} parts={parts} variant="outline" trigger="+ Add item" />}
           >
             <SimpleTable
               headers={["Item", "Type", "Qty", "Price", "Tax", "Discount", "Total", ""]}
@@ -108,7 +110,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{job.invoice.invoiceNumber}</span>
                   <span>{money(job.invoice.total)}</span>
-                  <a className="text-primary hover:underline" href={`/api/invoices/${job.invoice.id}/pdf`}>Download PDF</a>
+                  <a className="text-primary hover:underline" href={`/api/invoices/${job.invoice.id}/pdf`}><Download className="mr-1 inline size-3.5" />Download PDF</a>
                   <ActionButton label="Send on WhatsApp" variant="outline" endpoint={`/api/invoices/${job.invoice.id}/send`} success="Invoice sent" />
                   {!paid && <ActionButton label="Update invoice" variant="outline" endpoint="/api/invoices" body={{ serviceJobId: job.id }} success="Invoice updated" />}
                 </div>

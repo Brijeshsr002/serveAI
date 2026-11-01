@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client";
+import { workerLoadLabel } from "@/lib/format";
 
 type Customer = { id: string; name: string; phone: string; vehicles: { id: string; label: string }[] };
 
@@ -19,7 +20,7 @@ export function NewJobDialog({
 }: {
   customers: Customer[];
   serviceTypes: string[];
-  workers: { id: string; name: string; activeJobs: number }[];
+  workers: { id: string; name: string; activeJobs: number; onLeave?: boolean }[];
   base: string;
   presetCustomerId?: string;
   presetVehicleId?: string;
@@ -73,7 +74,7 @@ export function NewJobDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>New service job</DialogTrigger>
+      <DialogTrigger render={<Button size="sm" />}>+ New service job</DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>New service job</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
@@ -129,7 +130,7 @@ export function NewJobDialog({
             <Label htmlFor="assignedWorkerId">Assign worker</Label>
             <select id="assignedWorkerId" name="assignedWorkerId" className={SELECT_CLASS}>
               <option value="">Assign later</option>
-              {workers.map((w) => <option key={w.id} value={w.id}>{w.name} — {w.activeJobs} active job{w.activeJobs === 1 ? "" : "s"}</option>)}
+              {workers.map((w) => <option key={w.id} value={w.id}>{workerLoadLabel(w)}</option>)}
             </select>
           </div>
           <div className="space-y-1">
