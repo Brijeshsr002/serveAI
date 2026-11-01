@@ -6,8 +6,7 @@ import { canEditBill, toWorkItem, WorkerActions } from "@/components/worker-job-
 import { requireRole } from "@/lib/auth/page";
 import { dateTime, money } from "@/lib/format";
 import { getJobForUser } from "@/lib/services/jobs";
-import { getSettings } from "@/lib/settings";
-import { parsePriceList } from "@/lib/work-catalog";
+import { billPrices } from "@/lib/services/service-rates";
 import { isTerminal, STATUS_LABEL, workerNextStatuses } from "@/lib/status";
 import { VoiceStatus } from "@/components/voice-status";
 
@@ -17,7 +16,7 @@ export default async function WorkerJobPage({ params }: { params: Promise<{ id: 
   const job = await getJobForUser(user, id).catch(() => null);
   if (!job) notFound();
   const canEdit = canEditBill(job);
-  const prices = parsePriceList((await getSettings()).price_list);
+  const prices = await billPrices();
   return (
     <>
       <PageHeader title={job.serviceNumber} subtitle={job.serviceType}><StatusBadge status={job.status} /></PageHeader>

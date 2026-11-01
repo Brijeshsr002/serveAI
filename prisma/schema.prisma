@@ -148,6 +148,12 @@ model ServiceType {
   name        String   @unique
   description String?
   active      Boolean  @default(true)
+  /// Default price for enquiries and new jobs. Blank means no set price.
+  rate         Decimal?  @db.Decimal(12, 2)
+  /// A rate change from reception or a worker, waiting for an admin.
+  proposedRate Decimal?  @map("proposed_rate") @db.Decimal(12, 2)
+  proposedBy   String?   @map("proposed_by")
+  proposedAt   DateTime? @map("proposed_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

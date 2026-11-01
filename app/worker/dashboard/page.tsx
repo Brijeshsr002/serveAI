@@ -3,9 +3,8 @@ import { WorkerJobCard } from "@/components/worker-job-card";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { addDays, startOfDayIST } from "@/lib/format";
-import { getSettings } from "@/lib/settings";
+import { billPrices } from "@/lib/services/service-rates";
 import { ACTIVE_STATUSES } from "@/lib/status";
-import { parsePriceList } from "@/lib/work-catalog";
 
 const include = {
   customer: { select: { name: true } },
@@ -16,7 +15,7 @@ const include = {
 
 export default async function WorkerDashboard() {
   const user = await requireRole(["WORKER"]);
-  const prices = parsePriceList((await getSettings()).price_list);
+  const prices = await billPrices();
   const today = startOfDayIST();
   const tomorrow = addDays(today, 1);
   const jobs = await db.serviceJob.findMany({

@@ -9,6 +9,7 @@ import { ApiError, badRequest, conflict, forbidden, notFound } from "@/lib/error
 import { loadJobContext, NotificationService } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
 import { generateInvoiceIfNeeded } from "@/lib/services/invoices";
+import { defaultRate } from "@/lib/services/service-rates";
 import { ACTIVE_STATUSES, boardTargets, isTerminal, STATUS_LABEL, TRANSITIONS } from "@/lib/status";
 
 export const newTrackingToken = () => randomBytes(32).toString("hex");
@@ -59,11 +60,14 @@ export async function createJob(actor: Actor, input: JobCreate, externalRef?: st
     throw badRequest("VEHICLE_CUSTOMER_MISMATCH", "This vehicle does not belong to the selected customer");
   }
   const { assignedWorkerId, ...fields } = input;
+  // An enquiry with no quote starts from the service's default price.
+  const estimatedAmount = fields.estimatedAmount ?? (await defaultRate(fields.serviceType));
 
   const job = await db.$transaction(async (tx) => {
     const created = await tx.serviceJob.create({
       data: {
         ...fields,
+        estimatedAmount,
         serviceNumber: await nextServiceNumber(tx),
         trackingToken: newTrackingToken(),
         createdById: actor.id,

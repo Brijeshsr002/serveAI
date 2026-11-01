@@ -66,6 +66,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           base={base}
           workers={workers}
           serviceTypes={types.map((t) => t.name)}
+          rates={Object.fromEntries(types.filter((t) => t.rate !== null).map((t) => [t.name, Number(t.rate)]))}
           customers={customers.map((c) => ({
             id: c.id,
             name: c.name,

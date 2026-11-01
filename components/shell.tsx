@@ -40,12 +40,14 @@ const NAV: Record<Role, NavItem[]> = {
     ["Customers", "/reception/customers", Users],
     ["Vehicles", "/reception/vehicles", Car],
     ["Kanban Board", "/reception/jobs", ListChecks],
+    ["Service Rates", "/reception/service-rates", Tags],
     ["Payments", "/reception/payments", CreditCard],
     ["WhatsApp", "/reception/whatsapp", MessageCircle],
   ],
   WORKER: [
     ["My Jobs", "/worker/dashboard", ListChecks],
     ["Completed Jobs", "/worker/completed", CheckCircle2],
+    ["Service Rates", "/worker/service-rates", Tags],
     ["Profile", "/worker/profile", User],
   ],
 };

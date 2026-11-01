@@ -1,7 +1,7 @@
 import { Prisma, type Customer } from "@prisma/client";
 import { SYSTEM_ACTOR } from "@/lib/activity";
 import { db } from "@/lib/db";
-import { dateTime } from "@/lib/format";
+import { dateTime, rupees } from "@/lib/format";
 import { createJob } from "@/lib/services/jobs";
 import { getSettings, trackingUrl } from "@/lib/settings";
 import { ACTIVE_STATUSES } from "@/lib/status";
@@ -61,8 +61,9 @@ async function offerServices(customer: Customer, settings: Settings, vehicleId: 
   const types = await db.serviceType.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 20 });
   if (types.length === 0) return offerSlots(customer, settings, vehicleId, "General Service");
   const names = types.map((t) => t.name);
+  const labels = types.map((t) => (t.rate ? `${t.name}: ${rupees(t.rate)}` : t.name));
   await setPending(customer.id, { intent: "BOOK", stage: "SERVICE", vehicleId, types: names });
-  return `What does your car need?\n\n${numbered(names)}\n\nReply with the number, or CANCEL to stop.`;
+  return `What does your car need?\n\n${numbered(labels)}\n\nReply with the number, or CANCEL to stop.`;
 }
 
 /** Vehicles already in for service can't be booked again until that job ends. */
@@ -127,6 +128,6 @@ export async function continueBooking(customer: Customer, pending: BookingPendin
   );
   return {
     jobId: job.id,
-    reply: `You're booked for ${pending.serviceType} on ${dateTime(slot)}.\nYour service ID is ${job.serviceNumber}.\nTrack it here: ${trackingUrl(job.trackingToken)}`,
+    reply: `You're booked for ${pending.serviceType} on ${dateTime(slot)}.${job.estimatedAmount ? `\nEstimated price: ${rupees(job.estimatedAmount)}.` : ""}\nYour service ID is ${job.serviceNumber}.\nTrack it here: ${trackingUrl(job.trackingToken)}`,
   };
 }

@@ -7,6 +7,7 @@ import { sendFreeformText } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
 import { normalizeRegistration } from "@/lib/phone";
 import { decideItems } from "@/lib/services/invoices";
+import { ratedServices } from "@/lib/services/service-rates";
 import { type BookingPending, continueBooking, isBookingRequest, startBooking } from "@/lib/services/whatsapp-booking";
 import { getSettings, trackingUrl, appUrl } from "@/lib/settings";
 import { ACTIVE_STATUSES, STATUS_LABEL } from "@/lib/status";
@@ -115,7 +116,15 @@ export async function replyForMessage(customer: Customer, text: string): Promise
   }
 
   const jobs = await relevantJobs(customer.id, intent);
-  if (jobs.length === 0) return { reply: "You don't have an active service with us right now. Reply here to book one." };
+  if (jobs.length === 0) {
+    // "How much?" from someone with no job is an enquiry, so answer with the default prices.
+    const rates = intent === "AMOUNT" ? await ratedServices() : [];
+    if (rates.length > 0) {
+      const list = rates.map((r) => `${r.name}: ${rupees(r.rate)}`).join("\n");
+      return { reply: `Our prices:\n${list}\n\nFinal prices depend on your car. Send BOOK to choose a time.` };
+    }
+    return { reply: "You don't have an active service with us right now. Reply here to book one." };
+  }
   if (jobs.length === 1) return { reply: await answer(intent, jobs[0]), jobId: jobs[0].id };
 
   const list = jobs.map((j, i) => `${i + 1}. ${j.vehicle.brand} ${j.vehicle.model} — ${j.vehicle.registrationNumber} — ${STATUS_LABEL[j.status]}`).join("\n");

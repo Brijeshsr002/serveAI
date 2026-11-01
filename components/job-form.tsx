@@ -15,7 +15,7 @@ import { api } from "@/lib/client";
 type Customer = { id: string; name: string; phone: string; vehicles: { id: string; label: string }[] };
 
 export function NewJobDialog({
-  customers, serviceTypes, workers, base, presetCustomerId, presetVehicleId,
+  customers, serviceTypes, workers, base, presetCustomerId, presetVehicleId, rates = {},
 }: {
   customers: Customer[];
   serviceTypes: string[];
@@ -23,11 +23,14 @@ export function NewJobDialog({
   base: string;
   presetCustomerId?: string;
   presetVehicleId?: string;
+  /** Service name to default price. */
+  rates?: Record<string, number>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [customerId, setCustomerId] = useState(presetCustomerId ?? "");
   const [filter, setFilter] = useState("");
+  const [estimate, setEstimate] = useState(serviceTypes[0] && rates[serviceTypes[0]] !== undefined ? String(rates[serviceTypes[0]]) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -94,8 +97,8 @@ export function NewJobDialog({
           </div>
           <div className="space-y-1">
             <Label htmlFor="serviceType">Service type *</Label>
-            <select id="serviceType" name="serviceType" required className={SELECT_CLASS}>
-              {serviceTypes.map((t) => <option key={t}>{t}</option>)}
+            <select id="serviceType" name="serviceType" required className={SELECT_CLASS} onChange={(e) => setEstimate(rates[e.target.value] !== undefined ? String(rates[e.target.value]) : "")}>
+              {serviceTypes.map((t) => <option key={t} value={t}>{t}{rates[t] !== undefined ? ` (₹${rates[t]})` : ""}</option>)}
             </select>
           </div>
           <div className="space-y-1">
@@ -105,7 +108,7 @@ export function NewJobDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="estimatedAmount">Estimated cost (₹)</Label>
-              <Input id="estimatedAmount" name="estimatedAmount" type="number" min={0} step="any" />
+              <Input id="estimatedAmount" name="estimatedAmount" type="number" min={0} step="any" value={estimate} onChange={(e) => setEstimate(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="priority">Priority</Label>

@@ -6,8 +6,8 @@ import { db } from "@/lib/db";
 import { dateTime, money, time } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { getJobForUser, workersWithLoad } from "@/lib/services/jobs";
-import { getSettings, trackingUrl } from "@/lib/settings";
-import { parsePriceList } from "@/lib/work-catalog";
+import { billPrices } from "@/lib/services/service-rates";
+import { trackingUrl } from "@/lib/settings";
 import { WorkItemDialog } from "@/components/work-item-dialog";
 import { boardTargets, isTerminal, STATUS_LABEL, STATUSES } from "@/lib/status";
 import { VoiceStatus } from "@/components/voice-status";
@@ -30,7 +30,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   const openPayment = job.payments.find((p) => p.status === "PENDING" || p.status === "PROCESSING");
   const itemsTotal = job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0);
   const closed = isTerminal(job.status);
-  const prices = parsePriceList((await getSettings()).price_list);
+  const prices = await billPrices();
 
   return (
     <>
