@@ -126,7 +126,7 @@ export function Composer({ customerId, windowOpen, serviceJobId }: { customerId:
           {chosen && (
             <form onSubmit={sendTemplate} className="space-y-2">
               <p className="font-medium">{chosen.label}</p>
-              <p className="rounded-lg bg-green-50 p-2 text-green-950">{chosen.body.replace(/\{\{(\d+)\}\}/g, (whole, n) => values[Number(n) - 1] || whole)}</p>
+              <p className="rounded-lg bg-green-50 p-2 break-words text-green-950 [overflow-wrap:anywhere]">{chosen.body.replace(/\{\{(\d+)\}\}/g, (whole, n) => values[Number(n) - 1] || whole)}</p>
               {chosen.params.map((p, i) => (
                 <label key={p.label} className="block text-xs font-medium">
                   {p.label}
