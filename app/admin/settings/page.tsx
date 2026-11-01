@@ -50,17 +50,6 @@ export default async function SettingsPage() {
               { key: "booking_days_ahead", label: "Days ahead customers can book" },
             ],
           },
-          {
-            title: "Approved WhatsApp templates",
-            hint: "Used when the customer hasn't messaged in 24 hours. Names must match templates approved in Sendiee. Leave blank to skip sending.",
-            fields: [
-              { key: "template_status_update", label: "Status update" },
-              { key: "template_payment_request", label: "Payment request" },
-              { key: "template_payment_confirmation", label: "Payment confirmation" },
-              { key: "template_invoice", label: "Invoice" },
-              { key: "template_language", label: "Template language" },
-            ],
-          },
         ]}
       />
       <p className="mt-6 text-center text-xs text-muted-foreground"><Link href="/admin/updates" className="hover:text-foreground hover:underline">v{LATEST_VERSION}</Link></p>

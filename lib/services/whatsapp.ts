@@ -1,4 +1,3 @@
-import { getSettings } from "@/lib/settings";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -6,7 +5,7 @@ import { logActivity, SYSTEM_ACTOR } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import { db, isUniqueViolation, nextVehicleCode } from "@/lib/db";
 import { ApiError, conflict, notFound } from "@/lib/errors";
-import { isWindowOpen, loadJobContext, mapSendieeStatus, NotificationService, sendFreeformText, sendTemplateText } from "@/lib/notifications";
+import { loadJobContext, mapSendieeStatus, NotificationService, sendFreeformText, sendTemplateText } from "@/lib/notifications";
 import { normalizePhone, normalizeRegistration } from "@/lib/phone";
 import { sendieeClient, SendieeError } from "@/lib/sendiee";
 import { normalizeSendieeEvent } from "@/lib/sendiee/normalizer";
@@ -14,7 +13,8 @@ import { findOrCreateCustomerByPhone } from "@/lib/services/customers";
 import { createJob } from "@/lib/services/jobs";
 import { isFree } from "@/lib/services/whatsapp-booking";
 import { runCommands } from "@/lib/services/whatsapp-commands";
-import { ACTIVE_STATUSES } from "@/lib/status";
+import { getSettings, trackingUrl } from "@/lib/settings";
+import { ACTIVE_STATUSES, STATUS_LABEL } from "@/lib/status";
 
 /** Accepts the shared secret from a header or query, since Automation Builder setups vary. */
 export function verifySendieeSecret(req: { headers: { get(n: string): string | null }; nextUrl: URL }) {
@@ -233,6 +233,29 @@ async function findOrCreateVehicle(
   }
 }
 
+export const carStatusSchema = z.object({
+  phone: z.string().min(5),
+  registrationNumber: z.string().trim().min(4).max(20),
+});
+
+/** The latest job for a car. Both must match, so nobody can look up a stranger's car from a registration plate. */
+export async function carStatus(input: z.output<typeof carStatusSchema>) {
+  const phone = normalizePhone(input.phone);
+  const vehicle = await db.vehicle.findUnique({
+    where: { registrationNumber: normalizeRegistration(input.registrationNumber) },
+    include: { customer: true, serviceJobs: { orderBy: { createdAt: "desc" }, take: 1 } },
+  });
+  const job = vehicle?.serviceJobs[0];
+  if (!job || !phone || vehicle.customer.phone !== phone) return { found: false };
+  return {
+    found: true,
+    serviceNumber: job.serviceNumber,
+    car: `${vehicle.brand} ${vehicle.model} ${vehicle.registrationNumber}`,
+    status: STATUS_LABEL[job.status],
+    trackingUrl: trackingUrl(job.trackingToken),
+  };
+}
+
 export const sendSchema = z
   .object({
     customerId: z.string().min(1),
@@ -249,12 +272,6 @@ export async function sendStaffMessage(actor: Actor, input: z.output<typeof send
   if (!customer) throw notFound("CUSTOMER_NOT_FOUND", "Customer not found");
   const spec = { customerId: customer.id, phone: customer.phone, serviceJobId: input.serviceJobId };
 
-  if (!input.templateName && !(await isWindowOpen(customer.id))) {
-    throw conflict(
-      "WHATSAPP_WINDOW_CLOSED",
-      "This customer hasn't messaged in the last 24 hours, so WhatsApp only allows an approved template",
-    );
-  }
   try {
     const message = input.templateName
       ? await sendTemplateText(

@@ -6,7 +6,6 @@ import { Field, PageHeader, StatusBadge, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { dateTime } from "@/lib/format";
-import { isWindowOpen } from "@/lib/notifications";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { isSendieeConfigured } from "@/lib/sendiee";
 import { ACTIVE_STATUSES } from "@/lib/status";
@@ -33,7 +32,6 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
       })
     : null;
   if (selected) await db.whatsappConversation.updateMany({ where: { customerId: selected.id, unreadCount: { gt: 0 } }, data: { unreadCount: 0 } });
-  const windowOpen = selected ? await isWindowOpen(selected.id) : false;
 
   return (
     <>
@@ -82,7 +80,7 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
               ))}
               <ScrollToEnd dep={selected.messages.length} />
             </div>
-            <Composer key={selected.id} customerId={selected.id} windowOpen={windowOpen} />
+            <Composer key={selected.id} customerId={selected.id} />
           </div>
         ) : (
           <p className="p-6 text-sm text-muted-foreground">Select a conversation</p>

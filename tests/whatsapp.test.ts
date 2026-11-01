@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { POST as webhook } from "@/app/api/webhooks/sendiee/route";
 import { POST as intake } from "@/app/api/webhooks/sendiee/service-request/route";
 import { GET as slots } from "@/app/api/webhooks/sendiee/slots/route";
+import { POST as carStatus } from "@/app/api/webhooks/sendiee/status/route";
 import { POST as send } from "@/app/api/whatsapp/send/route";
 import { POST as syncRoute } from "@/app/api/whatsapp/conversations/[customerId]/sync/route";
 import { db } from "@/lib/db";
@@ -31,21 +32,13 @@ describe("WhatsApp service", () => {
     expect(JSON.stringify(c.body)).not.toContain("test-sendiee-key");
   });
 
-  it("switches to the approved template outside the window", async () => {
+  it("sends freeform even when the customer hasn't messaged lately, never a template", async () => {
     const { job } = await makeJob();
     await NotificationService.sendServiceStatusUpdate(await loadJobContext(job.id), "INSPECTION");
     const [c] = sendieeCalls();
-    expect(c.url).toBe("https://api.sendiee.com/v2.0/whatsapp/send");
-    expect(c.body.templateName).toBe("serveai_service_update");
-    expect(c.body.bodyParameters).toHaveLength(4);
-  });
-
-  it("skips and records it when the window is closed and no template is set", async () => {
-    await db.setting.create({ data: { key: "template_status_update", value: "" } });
-    const { job } = await makeJob();
-    await NotificationService.sendServiceStatusUpdate(await loadJobContext(job.id), "INSPECTION");
-    expect(sendieeCalls()).toHaveLength(0);
-    expect(await db.notification.count({ where: { status: "SKIPPED" } })).toBe(1);
+    expect(c.url).toBe("https://api.sendiee.com/v2.0/whatsapp/message");
+    expect(c.body.templateName).toBeUndefined();
+    expect(await db.notification.count({ where: { status: "SENT" } })).toBe(1);
   });
 
   it("stores outbound messages with the wamid and a failed send with its error", async () => {
@@ -70,13 +63,12 @@ describe("WhatsApp service", () => {
     expect(sendieeCalls()).toHaveLength(1);
   });
 
-  it("tells staff when the window is closed instead of attempting a freeform send", async () => {
+  it("lets staff send freeform without waiting for the customer to message", async () => {
     const cookie = await loginCookie((await makeUser("RECEPTIONIST", "Rita")).email);
     const c = await makeCustomer();
-    const { status, json } = await call(send, "POST", { cookie, body: { customerId: c.id, text: "Hi" } });
-    expect(status).toBe(409);
-    expect(json.error.code).toBe("WHATSAPP_WINDOW_CLOSED");
-    expect(sendieeCalls()).toHaveLength(0);
+    const { status } = await call(send, "POST", { cookie, body: { customerId: c.id, text: "Hi" } });
+    expect(status).toBe(201);
+    expect(sendieeCalls()).toHaveLength(1);
   });
 
   it("syncs documented chat history, skipping internal notes, without duplicating", async () => {
@@ -209,6 +201,24 @@ describe("Sendiee AI intake", () => {
     expect(status).toBe(409);
     expect(json.error.code).toBe("SLOT_TAKEN");
     expect(await db.serviceJob.count()).toBe(2);
+  });
+
+  it("tells the assistant a car's status only when the phone and registration match", async () => {
+    const ask = (body: object, headers: Record<string, string> = webhookHeaders) => call(carStatus, "POST", { raw: JSON.stringify(body), headers });
+    await post(payload);
+    const job = await db.serviceJob.findFirstOrThrow();
+    await db.serviceJob.update({ where: { id: job.id }, data: { status: "INSPECTION" } });
+
+    expect((await ask({ phone: "9876543210", registrationNumber: "TN38AB1234" }, {})).status).toBe(401);
+    const { status, json } = await ask({ phone: "9876543210", registrationNumber: "tn 38 ab 1234" });
+    expect(status).toBe(200);
+    expect(json.data).toMatchObject({ found: true, serviceNumber: job.serviceNumber, status: "Inspection" });
+    expect(json.data.trackingUrl).toContain(job.trackingToken);
+
+    const stranger = await ask({ phone: "9000000000", registrationNumber: "TN38AB1234" });
+    expect(stranger.json.data).toEqual({ found: false });
+    const unknown = await ask({ phone: "9876543210", registrationNumber: "TN01ZZ9999" });
+    expect(unknown.json.data).toEqual({ found: false });
   });
 
   it("lists free slots and services behind the secret", async () => {

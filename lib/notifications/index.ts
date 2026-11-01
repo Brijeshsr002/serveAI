@@ -103,7 +103,7 @@ export const sendDocument = (spec: SendSpec, link: string, filename: string) =>
 /**
  * Automatic notifications never throw: a WhatsApp outage must not undo a status change or payment.
  * The returned outcome is the only sign a message didn't go out.
- * Inside the 24-hour window the text goes as freeform; outside it, an approved template is required.
+ * Always freeform text. WhatsApp itself may refuse it when the customer hasn't messaged in 24 hours; that's recorded as FAILED.
  */
 async function notify(args: {
   kind: string;
@@ -132,15 +132,7 @@ async function notify(args: {
   }
 
   try {
-    if (await isWindowOpen(args.customer.id)) {
-      await sendFreeformText(spec);
-    } else if (args.templateName) {
-      await sendTemplateText(spec, args.templateName, args.templateParams, args.language);
-    } else {
-      const detail = "24-hour window closed and no template configured";
-      await record("SKIPPED", detail);
-      return { status: "SKIPPED", detail };
-    }
+    await sendFreeformText(spec);
     await record("SENT");
     return { status: "SENT" };
   } catch (err) {
@@ -270,7 +262,7 @@ export const NotificationService = {
     });
   },
 
-  /** Sends the PDF inside the window; outside it, a template carrying the link. */
+  /** Sends the invoice PDF. */
   async sendInvoice(job: JobContext, invoiceNumber: string) {
     const settings = await getSettings();
     const link = `${appUrl()}/api/track/${job.trackingToken}/invoice`;
@@ -280,18 +272,7 @@ export const NotificationService = {
       serviceJobId: job.id,
       text: fill(settings.msg_INVOICE, vars(job, settings, { invoice_number: invoiceNumber })),
     };
-    if (await isWindowOpen(job.customer.id)) {
-      await sendDocument(spec, link, `${invoiceNumber}.pdf`);
-    } else {
-      const template = settings.tpl_INVOICE || settings.template_invoice;
-      if (!template) throw conflict("TEMPLATE_NOT_SET", "Nothing was sent: the customer hasn't messaged in the last 24 hours and no invoice template is set in Settings.");
-      await sendTemplateText(
-        spec,
-        template,
-        [job.customer.name, invoiceNumber, job.serviceNumber, link],
-        settings.template_language,
-      );
-    }
+    await sendDocument(spec, link, `${invoiceNumber}.pdf`);
     await db.notification.create({
       data: { customerId: job.customer.id, serviceJobId: job.id, kind: "INVOICE", status: "SENT" },
     });

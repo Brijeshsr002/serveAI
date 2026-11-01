@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { notFound } from "@/lib/errors";
 import { rupees } from "@/lib/format";
-import { isWindowOpen } from "@/lib/notifications";
 import { MESSAGE_STEPS } from "@/lib/message-steps";
 import { appUrl, getSettings, trackingUrl } from "@/lib/settings";
 import { ACTIVE_STATUSES, STATUS_LABEL } from "@/lib/status";
@@ -82,7 +81,7 @@ export async function composerTemplates(customerId: string) {
     },
   ].filter((t) => t.name);
 
-  return { windowOpen: await isWindowOpen(customerId), serviceJobId: job?.id ?? null, messages, approved };
+  return { serviceJobId: job?.id ?? null, messages, approved };
 }
 
 export type ComposerTemplates = Awaited<ReturnType<typeof composerTemplates>>;

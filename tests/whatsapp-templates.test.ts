@@ -37,12 +37,10 @@ describe("templates in the typing bar", () => {
     expect(sendieeCalls()).toHaveLength(1);
   });
 
-  it("still allows free typing within 24 hours, and refuses it after", async () => {
+  it("allows free typing at any time", async () => {
     const cookie = await loginCookie((await makeUser("ADMIN", "Admin")).email);
     const { customer } = await makeJob();
     const body = { customerId: customer.id, text: "Your car is nearly ready" };
-    expect((await call(send, "POST", { cookie, body })).status).toBe(409);
-    await openWindow(customer.id);
     expect((await call(send, "POST", { cookie, body })).status).toBe(201);
   });
 });

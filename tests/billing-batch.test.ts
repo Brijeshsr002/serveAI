@@ -199,13 +199,11 @@ describe("payment reminders", () => {
     expect(await db.activityLog.findFirst({ where: { action: "PAYMENT_REMINDER_SENT" } })).toBeNull();
   });
 
-  it("says so when the 24-hour window is closed and there's no template", async () => {
+  it("sends the reminder as a normal message, with no template", async () => {
     const { payment } = await openPayment(rita);
-    await db.setting.create({ data: { key: "template_payment_request", value: "" } });
     const res = await remindPayment(payment.id);
-    expect(res.status).toBe(409);
-    expect(res.json.error.message).toContain("no template");
-    expect(sendieeCalls()).toEqual([]);
+    expect(res.status).toBe(200);
+    expect(sendieeCalls()[0].body.templateName).toBeUndefined();
   });
 
   it("surfaces a Sendiee failure", async () => {
@@ -307,15 +305,7 @@ describe("sending an invoice", () => {
     expect(failed.json.error.code).toBe("BOOM");
     fake.fail = null;
 
-    await db.setting.create({ data: { key: "template_invoice", value: "" } });
     fake.calls = [];
-    const noTemplate = await send();
-    expect(noTemplate.status).toBe(409);
-    expect(noTemplate.json.error.code).toBe("TEMPLATE_NOT_SET");
-    expect(sendieeCalls()).toEqual([]);
-    expect(await db.activityLog.findFirst({ where: { action: "INVOICE_SENT" } })).toBeNull();
-
-    await db.setting.deleteMany({ where: { key: "template_invoice" } });
     expect((await send()).status).toBe(200);
     expect(sendieeCalls()).toHaveLength(1);
     expect(await db.activityLog.findFirst({ where: { action: "INVOICE_SENT" } })).not.toBeNull();

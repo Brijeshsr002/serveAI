@@ -102,14 +102,6 @@ export function MessageEditor({ values }: { values: Record<string, string> }) {
                   <p className="mb-1 text-xs font-medium text-green-800">Customer sees</p>
                   {fill(state[msgKey], { ...SAMPLE, garage_name: garage }) || "Nothing. A blank message isn't sent."}
                 </div>
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted-foreground">WhatsApp template for this step (optional)</summary>
-                  <div className="mt-2 space-y-1">
-                    <Label htmlFor={`tpl_${step.key}`}>Approved template name</Label>
-                    <Input id={`tpl_${step.key}`} value={state[`tpl_${step.key}`]} onChange={(e) => set(`tpl_${step.key}`, e.target.value)} placeholder="Blank uses the default from Settings" />
-                    <p className="text-xs text-muted-foreground">Sent when the customer hasn&apos;t messaged in 24 hours. It must take the same variables as the default template.</p>
-                  </div>
-                </details>
               </article>
             );
           })}

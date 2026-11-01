@@ -60,8 +60,6 @@ Cancelling isn't in the brief's transition list. It's allowed for staff from any
 
 Reaching READY_FOR_DELIVERY or COMPLETED generates the invoice automatically if the job has items. A job with no items is left without an invoice.
 
-## WhatsApp 24-hour window
+## WhatsApp messages
 
-Inside 24 hours of the customer's last message, updates go as freeform text using the editable messages in Settings. Outside it, they use the approved template named in Settings. With no template set, the send is skipped and recorded as `SKIPPED`.
-
-`last_inbound_at` drives this. It's updated by webhooks and by Sync from Sendiee.
+Updates always go as freeform text, using the editable messages in Settings. No templates are used. WhatsApp can refuse freeform text when the customer hasn't messaged in 24 hours; the send is then recorded as `FAILED` with Sendiee's error code.

@@ -26,7 +26,7 @@ The key is used server-side only, from `lib/sendiee/client.ts`.
 
 ## 3. WhatsApp templates
 
-WhatsApp only allows approved templates when the customer hasn't messaged in 24 hours, so without these, updates to quiet customers are not delivered. Create them in Sendiee and wait for Meta's approval. The names can be changed in **Settings**, but the parameter order must stay as shown.
+Automatic updates are sent as normal messages, so these are optional. WhatsApp can refuse a normal message when the customer hasn't messaged in 24 hours, and that send is marked failed. Templates were the old way to reach those customers, so without these, updates to quiet customers are not delivered. Create them in Sendiee and wait for Meta's approval. The names can be changed in **Settings**, but the parameter order must stay as shown.
 
 | Template name | Body | Parameters |
 |---|---|---|
