@@ -112,10 +112,11 @@ curl -b jar -X POST https://HOST/api/service-jobs/JOB_ID/status -H 'Content-Type
 | Method | URL | Access | Body | Errors |
 |---|---|---|---|---|
 | GET | `/api/payments` | Staff | | |
-| POST | `/api/payments/create` | Staff | `serviceJobId`*, `notifyCustomer` (default true) | 409 `INVOICE_REQUIRED`, `SERVICE_ALREADY_PAID`, `SERVICE_CLOSED`, `NOTHING_TO_PAY`, `PAYMENT_IN_PROGRESS`; 503 `PAYMENT_NOT_CONFIGURED`; 502 `PAYMENT_PROVIDER_ERROR` |
+| POST | `/api/payments/create` | Staff | `serviceJobId`*, `notifyCustomer` (default true). Returns the payment plus `notification` (what became of the message, null if none was attempted) and `warning` (text to show when `notifyCustomer` was asked for and the customer may not have the message, otherwise null) | 409 `INVOICE_REQUIRED`, `SERVICE_ALREADY_PAID`, `SERVICE_CLOSED`, `NOTHING_TO_PAY`, `PAYMENT_IN_PROGRESS`; 503 `PAYMENT_NOT_CONFIGURED`; 502 `PAYMENT_PROVIDER_ERROR` |
 | GET | `/api/payments/:id` | Staff | | 404 `PAYMENT_NOT_FOUND` |
+| POST | `/api/payments/:id/remind` | Staff | None. Resends the existing link and amount through the payment-request message, and returns `{"status":"SENT"}` only if the message went out | 404 `PAYMENT_NOT_FOUND`; 409 `PAYMENT_ALREADY_PAID`, `PAYMENT_NOT_OPEN`, `PAYMENT_LINK_MISSING`, `SERVICE_CLOSED`, `SERVICE_ALREADY_PAID`, `BILL_CHANGED`, `REMINDER_NOT_SENT` (switched off, blank, or no template outside the 24-hour window); 503 `WHATSAPP_NOT_CONFIGURED`; 502 Sendiee errors (for a refusal, nothing was sent; for `SENDIEE_UNREACHABLE` or a Sendiee 5xx, the message may have gone out, so check before retrying) |
 
-There's no amount field: the amount is always the invoice total. Calling create again returns the open link (200), or cancels and replaces it if the bill changed (201).
+There's no amount field: the amount is always the invoice total. Calling create again returns the open link (200) without messaging the customer, or cancels and replaces it if the bill changed (201). Use `remind` to send an open link again.
 
 ## Invoices
 
@@ -125,7 +126,7 @@ There's no amount field: the amount is always the invoice total. Calling create 
 | POST | `/api/invoices` | Staff | `serviceJobId`* (creates or rebuilds) | 409 `NO_SERVICE_ITEMS`, `SERVICE_ALREADY_PAID` |
 | GET | `/api/invoices/:id` | Staff | | 404 `INVOICE_NOT_FOUND` |
 | GET | `/api/invoices/:id/pdf` | Staff | Returns `application/pdf` | 404 |
-| POST | `/api/invoices/:id/send` | Staff | Sends on WhatsApp | 404, 502 Sendiee errors |
+| POST | `/api/invoices/:id/send` | Staff | Sends on WhatsApp | 404; 409 `TEMPLATE_NOT_SET`; 503 `WHATSAPP_NOT_CONFIGURED`; 502 Sendiee errors |
 
 ## WhatsApp
 
@@ -188,7 +189,7 @@ Admin accounts aren't employees: no endpoint here can create one or give anyone 
 | DELETE | `/api/users/:id` | Admin | Deactivates the user | 400 `CANNOT_CHANGE_SELF`, 409 `WORKER_HAS_ACTIVE_JOBS` |
 | POST | `/api/profile/password` | All | `currentPassword`*, `newPassword`* | 400 `WRONG_PASSWORD` |
 | GET | `/api/service-types` | Staff | `?kind=PART` or `ALL`; services only by default | |
-| POST | `/api/service-types` | All | `name`*, `description`, `kind` (`SERVICE` or `PART`), `rate`. Only admins add services; anyone else's part needs a `rate`, which waits for approval | 403, 400 `RATE_REQUIRED`, 409 `DUPLICATE_SERVICE_TYPE` |
+| POST | `/api/service-types` | All | `name`*, `description`, `kind` (`SERVICE` or `PART`), `rate`. Blank `rate` means no rate. Only admins add services; an admin's rate applies at once, and anyone else's waits for approval | 403, 400 `VALIDATION_ERROR`, 409 `DUPLICATE_SERVICE_TYPE` |
 | PATCH | `/api/service-types/:id` | Admin | `name`, `description`, `active` | |
 | GET, PATCH | `/api/settings` | Admin | Key-value pairs of known setting keys | |
 | GET | `/api/search` | Staff | `?q=` matches name, phone or vehicle number; returns `customers`, `vehicles` | |

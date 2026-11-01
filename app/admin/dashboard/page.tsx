@@ -26,9 +26,9 @@ export default async function DashboardPage() {
   return (
     <>
       <LiveScene clips={CLIPS.garage} className="mb-5 rounded-2xl">
-        <div className="px-6 py-10">
+        <div className="px-6 py-10 [text-shadow:0_1px_3px_rgb(0_0_0/0.8)]">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-slate-300">Welcome back, {user.name}. {stats.vehiclesInService} vehicle{stats.vehiclesInService === 1 ? "" : "s"} in the garage right now.</p>
+        <p className="text-sm text-white">Welcome back, {user.name}. {stats.vehiclesInService} vehicle{stats.vehiclesInService === 1 ? "" : "s"} in the garage right now.</p>
         </div>
       </LiveScene>
       {user.role === "RECEPTIONIST" && <ClockCard userId={user.id} />}

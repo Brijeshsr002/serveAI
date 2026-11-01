@@ -100,6 +100,21 @@ export const CHANGELOG: { version: string; date: string; changes: string[] }[] =
       "Someone moved to reception keeps their past jobs on the worker chart and CSV. Reopening one of their closed jobs sends it back to New to be assigned.",
     ],
   },
+  {
+    version: "1.8",
+    date: "2026-11-01",
+    changes: [
+      "One Billing page replaces Payments and Invoices, with a tab for each and Kanban and List views on both. Old links still work. Reception sees Payments only.",
+      "Send an invoice on WhatsApp straight from its card or row in Billing.",
+      "Send reminder on an open payment resends the same link for the same amount, after asking you to confirm. It creates no new link.",
+      "If a reminder or invoice doesn't go out, the person who pressed the button is told why, including when WhatsApp isn't set up or the message is switched off.",
+      "Services and Parts are now two tabs on Service Types and Service Rates. On Service Types, each tab shows how many rate requests are waiting.",
+      "Add service and Add part both take a rate. An admin's applies at once, anyone else's goes for approval, and blank means no rate.",
+      "Changing the service type when editing a job from Kanban fills in that service's approved rate as the estimate, which you can still change.",
+      "The dashboard banner plays real garage footage in its natural colours, with a plain dark shade behind the text. The tracking page's shade is plain too.",
+      "Add customer is now only on the Customers page, not the top bar.",
+    ],
+  },
 ];
 
 export const LATEST_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Check, Download, Phone } from "lucide-react";
 import { ActionButton } from "@/components/actions";
 import { LiveScene } from "@/components/live-scene";
-import { CLIPS } from "@/lib/media-clips";
+import { CLIPS, EVEN_OVERLAY } from "@/lib/media-clips";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
 import { PaymentBadge, StatusBadge } from "@/components/ui-kit";
@@ -51,14 +51,14 @@ export default async function TrackPage({ params }: { params: Promise<{ token: s
         <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground"><LiveRefresh /> {view.serviceNumber}</span>
       </header>
 
-      <LiveScene clips={CLIPS.service} className="rounded-2xl" overlay="bg-slate-950/70">
+      <LiveScene clips={CLIPS.service} className="rounded-2xl" overlay={EVEN_OVERLAY}>
         <div className="p-4">
-        <p className="text-sm text-slate-300">Hi {view.customerName}</p>
+        <p className="text-sm text-white/90">Hi {view.customerName}</p>
         <p className="mt-1 text-xl font-semibold text-balance">{STATUS_HINT[view.status]}</p>
         <h1 className="mt-3 font-medium">{view.vehicle.brand} {view.vehicle.model} · {view.vehicle.registrationNumber}</h1>
-        <p className="text-sm text-slate-300">{view.serviceType}</p>
+        <p className="text-sm text-white/90">{view.serviceType}</p>
         <div className="mt-3"><StatusBadge status={view.status} /></div>
-        {view.completedAt && <p className="mt-2 text-sm text-slate-300">Completed {dateTime(view.completedAt)}</p>}
+        {view.completedAt && <p className="mt-2 text-sm text-white/90">Completed {dateTime(view.completedAt)}</p>}
         </div>
       </LiveScene>
 

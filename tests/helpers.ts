@@ -12,12 +12,13 @@ export const PASSWORD = "Password123!";
 const HASH = bcrypt.hashSync(PASSWORD, 4);
 
 export type Sent = { url: string; method: string; body: any; headers: Record<string, string> };
-export const fake = { calls: [] as Sent[], fail: null as null | { status: number; code: string } };
+export const fake = { calls: [] as Sent[], fail: null as null | { status: number; code: string }, throws: null as null | Error };
 
 /** Stands in for api.sendiee.com and api.razorpay.com at the network boundary only. */
 export function installFakeApis() {
   fake.calls = [];
   fake.fail = null;
+  fake.throws = null;
   let counter = 0;
   vi.stubGlobal("fetch", async (input: URL | string, init: RequestInit = {}) => {
     const url = String(input);
@@ -27,6 +28,7 @@ export function installFakeApis() {
       body: init.body ? JSON.parse(init.body as string) : undefined,
       headers: init.headers as Record<string, string>,
     });
+    if (fake.throws) throw fake.throws;
     const json = (status: number, body: unknown) =>
       new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
     if (fake.fail) return json(fake.fail.status, { success: false, code: fake.fail.code, message: "fake failure" });

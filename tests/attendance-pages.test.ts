@@ -203,14 +203,14 @@ describe("attendance and staff pages", () => {
 
     it("the service rate pages only open for their own role", async () => {
       session.user = null;
-      await expect(WorkerRates()).rejects.toThrow("REDIRECT");
-      await expect(ReceptionRates()).rejects.toThrow("REDIRECT");
+      await expect(WorkerRates({ searchParams: empty })).rejects.toThrow("REDIRECT");
+      await expect(ReceptionRates({ searchParams: empty })).rejects.toThrow("REDIRECT");
       asUser(reception);
-      await expect(WorkerRates()).rejects.toThrow("REDIRECT");
-      expect(await html(await ReceptionRates())).toContain("Service Rates");
+      await expect(WorkerRates({ searchParams: empty })).rejects.toThrow("REDIRECT");
+      expect(await html(await ReceptionRates({ searchParams: empty }))).toContain("Service Rates");
       asUser(worker);
-      await expect(ReceptionRates()).rejects.toThrow("REDIRECT");
-      expect(await html(await WorkerRates())).toContain("Service Rates");
+      await expect(ReceptionRates({ searchParams: empty })).rejects.toThrow("REDIRECT");
+      expect(await html(await WorkerRates({ searchParams: empty }))).toContain("Service Rates");
     });
 
     it("every signed-in page checks the role itself", () => {

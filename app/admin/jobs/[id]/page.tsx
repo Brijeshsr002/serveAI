@@ -4,7 +4,7 @@ import { itemFields, jobEditFields } from "@/components/forms-config";
 import { ApprovalBadge, Field, PageHeader, PaymentBadge, Section, SimpleTable, StatusBadge, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
-import { dateTime, money, time } from "@/lib/format";
+import { dateTime, money, time, toNumber } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { getJobForUser, workersWithLoad } from "@/lib/services/jobs";
 import { billCatalog } from "@/lib/services/service-rates";
@@ -29,7 +29,9 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   ]);
   const paid = job.payments.some((p) => p.status === "PAID");
   const openPayment = job.payments.find((p) => p.status === "PENDING" || p.status === "PROCESSING");
-  const itemsTotal = job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0);
+  // A link for an old amount can't be resent or shared: creating a request is what replaces it.
+  const liveLink = openPayment?.paymentLink && job.invoice && toNumber(openPayment.amount) === toNumber(job.invoice.total) ? openPayment.paymentLink : null;
+  const itemsTotal =job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0);
   const closed = isTerminal(job.status);
   const catalog = await billCatalog();
 
@@ -119,8 +121,23 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
               )}
               {job.invoice && !paid && job.status !== "CANCELLED" && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <ActionButton label={openPayment ? "Resend payment link" : "Create payment request"} endpoint="/api/payments/create" body={{ serviceJobId: job.id, notifyCustomer: true }} success="Payment link ready" />
-                  {openPayment?.paymentLink && <CopyButton text={openPayment.paymentLink} label="Copy payment link" />}
+                  {openPayment && liveLink ? (
+                    <ActionButton
+                      label="Resend payment link"
+                      endpoint={`/api/payments/${openPayment.id}/remind`}
+                      confirm={`Send ${job.customer.name} a WhatsApp reminder for ${money(openPayment.amount)} on ${job.serviceNumber}? It uses the same payment link.`}
+                      success="Reminder sent on WhatsApp"
+                    />
+                  ) : (
+                    <ActionButton
+                      label={openPayment?.paymentLink ? "Create new payment request" : "Create payment request"}
+                      endpoint="/api/payments/create"
+                      body={{ serviceJobId: job.id, notifyCustomer: true }}
+                      confirm={openPayment?.paymentLink ? `The bill has changed since the last link was made. Cancel that link and send ${job.customer.name} a new one for ${money(job.invoice.total)} on WhatsApp?` : undefined}
+                      success="Payment request sent on WhatsApp"
+                    />
+                  )}
+                  {liveLink && <CopyButton text={liveLink} label="Copy payment link" />}
                 </div>
               )}
               <SimpleTable

@@ -1,5 +1,6 @@
 import type { Customer, MessageStatus, ServiceStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { ApiError, conflict } from "@/lib/errors";
 import { rupees } from "@/lib/format";
 import { SendieeError, sendieeClient } from "@/lib/sendiee";
 import type { StepKey } from "@/lib/message-steps";
@@ -46,6 +47,22 @@ async function touchConversation(customerId: string, text: string) {
   });
 }
 
+/** What became of a message. Automatic notifications ignore it; a send someone asked for must report it. */
+export type NotifyOutcome =
+  | { status: "SENT" }
+  | { status: "SKIPPED"; detail: string }
+  | { status: "FAILED"; code: string; message: string; unconfirmed: boolean };
+
+/**
+ * The error for someone who pressed a send button. Says plainly whether anything went out, and doesn't name server settings.
+ * An unconfirmed send must not read as a clean failure, or they press again and the customer gets it twice.
+ */
+export function whatsappFailure({ code, message, unconfirmed }: { code: string; message: string; unconfirmed: boolean }) {
+  if (code === "NOT_CONFIGURED") return new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp isn't set up yet, so nothing was sent. Add the Sendiee API key and brand number first.");
+  if (unconfirmed) return new ApiError(502, code, "Couldn't confirm with WhatsApp, so the message may or may not have gone out. Check the WhatsApp inbox before trying again.");
+  return new ApiError(502, code, `WhatsApp didn't take the message, so nothing was sent: ${message}`);
+}
+
 type SendSpec = { customerId: string; phone: string; serviceJobId?: string | null; text: string };
 
 /** Stores the outbound message, sends it, and records the result. Throws SendieeError on failure. */
@@ -85,6 +102,7 @@ export const sendDocument = (spec: SendSpec, link: string, filename: string) =>
 
 /**
  * Automatic notifications never throw: a WhatsApp outage must not undo a status change or payment.
+ * The returned outcome is the only sign a message didn't go out.
  * Inside the 24-hour window the text goes as freeform; outside it, an approved template is required.
  */
 async function notify(args: {
@@ -95,7 +113,7 @@ async function notify(args: {
   templateName: string;
   templateParams: string[];
   language: string;
-}) {
+}): Promise<NotifyOutcome> {
   const spec: SendSpec = {
     customerId: args.customer.id,
     phone: args.customer.phone,
@@ -108,8 +126,9 @@ async function notify(args: {
     });
 
   if (!args.text.trim()) {
-    await record("SKIPPED", "Message is blank in Customer Messages");
-    return;
+    const detail = "Message is blank in Customer Messages";
+    await record("SKIPPED", detail);
+    return { status: "SKIPPED", detail };
   }
 
   try {
@@ -118,14 +137,18 @@ async function notify(args: {
     } else if (args.templateName) {
       await sendTemplateText(spec, args.templateName, args.templateParams, args.language);
     } else {
-      await record("SKIPPED", "24-hour window closed and no template configured");
-      return;
+      const detail = "24-hour window closed and no template configured";
+      await record("SKIPPED", detail);
+      return { status: "SKIPPED", detail };
     }
     await record("SENT");
+    return { status: "SENT" };
   } catch (err) {
     const detail = err instanceof SendieeError ? err.code : "UNKNOWN_ERROR";
     console.error(`Notification ${args.kind} failed: ${detail}`);
     await record("FAILED", detail);
+    // Anything other than a SendieeError has no answer from Sendiee behind it, e.g. an unreadable reply to an accepted send.
+    return { status: "FAILED", code: detail, message: err instanceof SendieeError ? err.message : "Unknown error", unconfirmed: err instanceof SendieeError ? err.unconfirmed : true };
   }
 }
 
@@ -151,15 +174,16 @@ async function notifyStep(args: {
   text: string;
   defaultTemplate: string;
   templateParams: string[];
-}) {
+}): Promise<NotifyOutcome> {
   const { step, kind, job, settings } = args;
   if (settings[`notify_${step}`] === "false") {
+    const detail = "Turned off in Customer Messages";
     await db.notification.create({
-      data: { customerId: job.customer.id, serviceJobId: job.id, kind, status: "SKIPPED", detail: "Turned off in Customer Messages" },
+      data: { customerId: job.customer.id, serviceJobId: job.id, kind, status: "SKIPPED", detail },
     });
-    return;
+    return { status: "SKIPPED", detail };
   }
-  await notify({
+  return notify({
     kind,
     customer: job.customer,
     serviceJobId: job.id,
@@ -222,7 +246,7 @@ export const NotificationService = {
 
   async sendPaymentRequest(job: JobContext, amount: unknown, paymentLink: string) {
     const settings = await getSettings();
-    await notifyStep({
+    return notifyStep({
       step: "PAYMENT_REQUEST",
       kind: "PAYMENT_REQUEST",
       job,
@@ -259,9 +283,11 @@ export const NotificationService = {
     if (await isWindowOpen(job.customer.id)) {
       await sendDocument(spec, link, `${invoiceNumber}.pdf`);
     } else {
+      const template = settings.tpl_INVOICE || settings.template_invoice;
+      if (!template) throw conflict("TEMPLATE_NOT_SET", "Nothing was sent: the customer hasn't messaged in the last 24 hours and no invoice template is set in Settings.");
       await sendTemplateText(
         spec,
-        settings.tpl_INVOICE || settings.template_invoice,
+        template,
         [job.customer.name, invoiceNumber, job.serviceNumber, link],
         settings.template_language,
       );

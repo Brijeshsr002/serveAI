@@ -17,7 +17,7 @@ Customer ⇄ WhatsApp ⇄ Sendiee ⇄ ServAI ⇄ Reception / Admin → Worker
 | Workflow | Enforced status transitions, full history, logged admin overrides |
 | Worker view | Mobile-first; shows only the worker's own jobs |
 | WhatsApp | Inbox, automatic status updates, customer commands, AI intake webhook |
-| Billing | Service items, invoices with PDF, payment links, signed payment webhooks |
+| Billing | Service items, invoices with PDF, payment links, signed payment webhooks. One Billing page with Payments and Invoices tabs (Payments only for reception), sending invoices and payment reminders on WhatsApp |
 | Tracking | Public page per job, secured by a random token |
 | Employees | One admin page for workers and receptionists: role, salary, attendance, performance and a monthly CSV report |
 | Admin | Dashboard, charts, reports, CSV export, audit log, settings |
@@ -83,7 +83,7 @@ Tests call the real route handlers against a real database. Only `fetch` to Send
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe | API and webhook credentials |
 | `POSTGRES_PASSWORD` | docker-compose | Password for the bundled database |
 
-The app runs without Sendiee or payment credentials. Messages are stored as failed and payment requests return `PAYMENT_NOT_CONFIGURED`.
+The app runs without Sendiee or payment credentials. Messages are stored as failed, the Billing send buttons show `WHATSAPP_NOT_CONFIGURED`, and payment requests return `PAYMENT_NOT_CONFIGURED`.
 
 ## Sendiee setup
 

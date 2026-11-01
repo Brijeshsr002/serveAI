@@ -43,13 +43,15 @@ const PRIORITY_COLOR: Partial<Record<Priority, string>> = {
   URGENT: "bg-red-100 text-red-700",
 };
 
-export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
+export function JobBoard({ jobs, counts, base, workers, serviceTypes, rates = {} }: {
   jobs: BoardJob[];
   /** Totals per status, which can exceed the cards loaded. */
   counts: Partial<Record<ServiceStatus, number>>;
   base: string;
   workers: { id: string; name: string; activeJobs: number; onLeave: boolean; startsOn?: string | null }[];
   serviceTypes: string[];
+  /** Service name to approved rate. A service with no rate has no entry. */
+  rates?: Record<string, number>;
 }) {
   const router = useRouter();
   const [moved, setMoved] = useState<Record<string, ServiceStatus>>({});
@@ -117,6 +119,7 @@ export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
       type: "select",
       required: true,
       options: [...new Set([job.serviceType, ...serviceTypes])].map((t) => ({ value: t, label: t })),
+      fills: { field: "estimatedAmount", values: rates },
     },
     ...jobEditFields,
   ];

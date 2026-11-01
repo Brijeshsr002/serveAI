@@ -58,6 +58,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     workersWithLoad(),
   ]);
   const counts = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]));
+  const rates = Object.fromEntries(types.filter((t) => t.rate !== null).map((t) => [t.name, Number(t.rate)]));
   return (
     <>
       <PageHeader title={board ? "Kanban Board" : "Service Jobs"} subtitle={board ? `${statusCounts.reduce((sum, c) => sum + c._count, 0)} total` : `${jobs.length} shown`}>
@@ -66,7 +67,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           base={base}
           workers={workers}
           serviceTypes={types.map((t) => t.name)}
-          rates={Object.fromEntries(types.filter((t) => t.rate !== null).map((t) => [t.name, Number(t.rate)]))}
+          rates={rates}
           customers={customers.map((c) => ({
             id: c.id,
             name: c.name,
@@ -82,6 +83,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           counts={counts}
           workers={workers}
           serviceTypes={types.map((t) => t.name)}
+          rates={rates}
           jobs={jobs.map((j) => ({
             id: j.id,
             serviceNumber: j.serviceNumber,

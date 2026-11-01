@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SIDE_OVERLAY } from "@/lib/media-clips";
 import { cn } from "@/lib/utils";
 
 const FADE_MS = 900;
 
-/** Real footage behind a dark wash. People who ask for reduced motion get a still photo instead. */
+/** Real footage in its own colours, with a neutral shade behind the text. People who ask for reduced motion get a still photo instead. */
 export function LiveScene({ clips, className, overlay, children }: { clips: string[]; className?: string; overlay?: string; children?: React.ReactNode }) {
   const [moving, setMoving] = useState(false);
   const [slots, setSlots] = useState([0, 1]);
@@ -40,7 +41,7 @@ export function LiveScene({ clips, className, overlay, children }: { clips: stri
   }, [fading, front, back]);
 
   return (
-    <div className={cn("relative overflow-hidden bg-slate-950 text-white", className)} style={{ backgroundImage: `url(/media/${clips[0]}.jpg)`, backgroundSize: "cover", backgroundPosition: "center" }}>
+    <div className={cn("relative overflow-hidden bg-neutral-950 text-white", className)} style={{ backgroundImage: `url(/media/${clips[0]}.jpg)`, backgroundSize: "cover", backgroundPosition: "center" }}>
       {moving && (single ? [0] : [0, 1]).map((slot) => (
         <video
           key={slot}
@@ -69,7 +70,7 @@ export function LiveScene({ clips, className, overlay, children }: { clips: stri
           }}
         />
       ))}
-      <div aria-hidden="true" className={cn("absolute inset-0 z-[2]", overlay ?? "bg-gradient-to-r from-[#0B1033]/92 via-[#0B1033]/70 to-[#0B1033]/30")} />
+      <div aria-hidden="true" className={cn("absolute inset-0 z-[2]", overlay ?? SIDE_OVERLAY)} />
       <div className="relative z-10">{children}</div>
     </div>
   );

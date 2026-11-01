@@ -25,6 +25,8 @@ export type FormField = {
   omitEmpty?: boolean;
   /** Offered while typing; other values are still allowed. */
   suggestions?: string[];
+  /** On a select: picking an option listed here puts its value in another field, which can still be typed over. */
+  fills?: { field: string; values: Record<string, string | number> };
 };
 
 type Variant = "default" | "outline" | "secondary" | "ghost" | "destructive";
@@ -54,6 +56,17 @@ export function formValues(fields: FormField[], form: FormData, initial?: Record
     body[f.name] = f.type === "datetime-local" && value ? new Date(value).toISOString() : value;
   }
   return body;
+}
+
+/**
+ * What a select's `fills` puts in its target when `picked` is chosen; undefined leaves the target alone.
+ * Going back to the option the form opened on brings back what the target opened with, as that may be an agreed figure.
+ */
+export function filledValue(f: FormField, picked: string, openedOn: string, targetOpenedWith: string) {
+  if (!f.fills) return undefined;
+  if (picked === openedOn) return targetOpenedWith;
+  const value = f.fills.values[picked];
+  return value === undefined ? undefined : String(value);
 }
 
 export function FormDialog({
@@ -138,7 +151,18 @@ function FieldInput({ field: f, value }: { field: FormField; value: unknown }) {
       {f.type === "textarea" ? (
         <Textarea id={id} name={f.name} defaultValue={text} required={f.required} placeholder={f.placeholder} />
       ) : f.type === "select" ? (
-        <select id={id} name={f.name} defaultValue={text} required={f.required} className={SELECT_CLASS}>
+        <select
+          id={id}
+          name={f.name}
+          defaultValue={text}
+          required={f.required}
+          className={SELECT_CLASS}
+          onChange={f.fills ? (e) => {
+            const target = e.currentTarget.form?.elements.namedItem(f.fills!.field) as HTMLInputElement | null;
+            const next = target ? filledValue(f, e.currentTarget.value, text, target.defaultValue) : undefined;
+            if (target && next !== undefined) target.value = next;
+          } : undefined}
+        >
           {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       ) : (
@@ -157,6 +181,12 @@ function FieldInput({ field: f, value }: { field: FormField; value: unknown }) {
       {f.suggestions && <datalist id={`${id}-list`}>{f.suggestions.map((s) => <option key={s} value={s} />)}</datalist>}
     </div>
   );
+}
+
+/** A response's `warning` means the action worked but something the person expected didn't happen, so it replaces the success message. */
+export function showResult(data: { warning?: string | null } | null | undefined, success?: string) {
+  if (data?.warning) toast.warning(data.warning);
+  else if (success) toast.success(success);
 }
 
 export function ActionButton({
@@ -186,7 +216,7 @@ export function ActionButton({
         window.location.href = data[openKey];
         return;
       }
-      if (success) toast.success(success);
+      showResult(data, success);
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);

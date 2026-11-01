@@ -9,6 +9,11 @@ export class SendieeError extends Error {
   ) {
     super(message);
   }
+
+  /** Sendiee never clearly refused, so a POST may still have gone out: the request timed out or dropped, or the server errored. */
+  get unconfirmed() {
+    return this.code !== "NOT_CONFIGURED" && this.status >= 500;
+  }
 }
 
 const baseUrl = () => (process.env.SENDIEE_BASE_URL ?? "https://api.sendiee.com").replace(/\/$/, "");

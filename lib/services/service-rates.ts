@@ -4,7 +4,7 @@ import { logActivity } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import type { SessionUser } from "@/lib/auth/session";
 import { db, isUniqueViolation } from "@/lib/db";
-import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
+import { conflict, forbidden, notFound } from "@/lib/errors";
 import { toNumber } from "@/lib/format";
 import { notifyRateChanged, notifyRateRejected, notifyRateRequested } from "@/lib/services/staff-notifications";
 import { getSettings } from "@/lib/settings";
@@ -17,24 +17,31 @@ export const catalogItemSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional().nullable(),
   kind: z.enum(ServiceTypeKind).default("SERVICE"),
+  /** Blank means no rate, including a blank of only spaces, which Number() would read as 0. */
   rate: z
-    .union([z.number(), z.string(), z.null()])
+    .union([z.number(), z.string(), z.null()], { error: "Enter the rate as a number" })
     .optional()
+    .transform((v) => (typeof v === "string" ? v.trim() : v))
     .transform((v) => (v === "" || v === null || v === undefined ? null : Number(v)))
-    .pipe(z.number().min(0).max(100_000_000).nullable()),
+    .pipe(
+      z.number({ error: "Enter the rate as a number" })
+        .min(0, "The rate can't be negative")
+        .max(100_000_000, "The rate is too high")
+        .refine((v) => Math.round(v * 100) / 100 === v, "The rate can have at most 2 decimal places")
+        .nullable(),
+    ),
 });
 
-/** Admins add services and parts. Anyone else can add a part, and its price waits for an admin like any other rate. */
+/** Admins add services and parts, and a rate applies at once. Anyone else can add a part, and any price on it waits for an admin like any other rate. */
 export async function addCatalogItem(user: Pick<SessionUser, "role">, actor: Actor, input: z.output<typeof catalogItemSchema>) {
   const admin = user.role === "ADMIN";
   if (!admin && input.kind !== "PART") throw forbidden();
-  if (!admin && input.rate === null) throw badRequest("RATE_REQUIRED", "Enter a price for the admin to approve");
   const { rate, ...fields } = input;
   try {
     const type = await db.serviceType.create({
       data: {
         ...fields,
-        ...(admin ? { rate } : { proposedRate: rate, proposedBy: actor.name, proposedById: actor.id, proposedAt: new Date() }),
+        ...(admin ? { rate } : rate === null ? {} : { proposedRate: rate, proposedBy: actor.name, proposedById: actor.id, proposedAt: new Date() }),
       },
     });
     const noun = type.kind === "PART" ? "part" : "service type";

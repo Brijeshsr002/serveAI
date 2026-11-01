@@ -8,6 +8,6 @@ const schema = z.object({ serviceJobId: z.string().min(1), notifyCustomer: z.boo
 
 export const POST = authed(STAFF, async ({ actor, body }) => {
   const { serviceJobId, notifyCustomer } = await body(schema);
-  const { payment, created } = await PaymentService.getOrCreateForJob(actor, serviceJobId, { notifyCustomer: notifyCustomer ?? true });
-  return ok(payment, created ? 201 : 200);
+  const { payment, created, notification, warning } = await PaymentService.getOrCreateForJob(actor, serviceJobId, { notifyCustomer: notifyCustomer ?? true });
+  return ok({ ...payment, notification, warning }, created ? 201 : 200);
 });

@@ -3,7 +3,7 @@ import type { Actor } from "@/lib/api/route";
 import { db, isUniqueViolation } from "@/lib/db";
 import { ApiError, conflict, notFound } from "@/lib/errors";
 import { toNumber } from "@/lib/format";
-import { loadJobContext, NotificationService } from "@/lib/notifications";
+import { loadJobContext, NotificationService, type NotifyOutcome, whatsappFailure } from "@/lib/notifications";
 import { trackingUrl } from "@/lib/settings";
 import { razorpay } from "./razorpay";
 import { stripe } from "./stripe";
@@ -22,10 +22,19 @@ function activeProvider() {
 
 export const providerForWebhook = (headers: WebhookHeaders) => PROVIDERS.find((p) => p.matchesWebhook(headers));
 
+/** What to tell someone whose new link was made but whose message didn't clearly go out. The link stands either way. */
+function newLinkWarning(outcome: NotifyOutcome) {
+  if (outcome.status === "SENT") return null;
+  if (outcome.status === "SKIPPED") return `Payment link created, but no WhatsApp message was sent: ${outcome.detail}`;
+  return `Payment link created. ${whatsappFailure(outcome).message}`;
+}
+
 export const PaymentService = {
   /**
    * Returns the job's open payment link, creating one if needed. The amount always comes
    * from the server-side invoice; no caller can supply it.
+   * Only a new link is messaged, so a double click can't reach the customer twice. `warning` is set
+   * when notifyCustomer was asked for and the customer may not have the message; sendReminder resends an open link.
    */
   async getOrCreateForJob(actor: Actor, jobId: string, { notifyCustomer = false } = {}) {
     const job = await db.serviceJob.findUnique({
@@ -47,7 +56,10 @@ export const PaymentService = {
       where: { serviceJobId: jobId, status: { in: ["PENDING", "PROCESSING"] } },
     });
     if (open) {
-      if (open.paymentLink && toNumber(open.amount) === amount) return { payment: open, created: false };
+      if (open.paymentLink && toNumber(open.amount) === amount) {
+        const warning = notifyCustomer ? "This job already has an open payment link, so no WhatsApp message was sent. Use Resend payment link to send it again." : null;
+        return { payment: open, created: false, notification: null, warning };
+      }
       // The bill changed since this link went out, so the old link must not stay payable.
       await this.cancelOpenPayment(open.id, open.paymentProvider, open.paymentOrderId);
     }
@@ -97,10 +109,48 @@ export const PaymentService = {
       summary: `${actor.name} created a payment link for ${job.serviceNumber}`,
       metadata: { amount, provider: provider.name },
     });
-    if (notifyCustomer) {
-      await NotificationService.sendPaymentRequest(await loadJobContext(jobId), amount, link.url);
+    const notification = notifyCustomer ? await NotificationService.sendPaymentRequest(await loadJobContext(jobId), amount, link.url) : null;
+    return { payment, created: true, notification, warning: notification && newLinkWarning(notification) };
+  },
+
+  /**
+   * Sends the open link again through the normal payment-request message. It never creates a link or touches
+   * the amount, and only returns if the message went out: anything else reaches the caller as an error.
+   */
+  async sendReminder(actor: Actor, paymentId: string) {
+    const payment = await db.payment.findUnique({
+      where: { id: paymentId },
+      include: { serviceJob: { select: { serviceNumber: true, status: true, invoice: { select: { total: true } } } } },
+    });
+    if (!payment) throw notFound("PAYMENT_NOT_FOUND", "Payment not found");
+    if (payment.status === "PAID") throw conflict("PAYMENT_ALREADY_PAID", "This payment is already paid, so no reminder was sent");
+    if (payment.status !== "PENDING" && payment.status !== "PROCESSING") {
+      throw conflict("PAYMENT_NOT_OPEN", `This payment is ${payment.status.toLowerCase()}, so no reminder was sent`);
     }
-    return { payment, created: true };
+    if (!payment.paymentLink) throw conflict("PAYMENT_LINK_MISSING", "This payment has no link to send. Create a payment request from the service job.");
+    const job = payment.serviceJob;
+    if (job.status === "CANCELLED") throw conflict("SERVICE_CLOSED", "This service was cancelled, so no reminder was sent");
+    if (await db.payment.findFirst({ where: { serviceJobId: payment.serviceJobId, status: "PAID" } })) {
+      throw conflict("SERVICE_ALREADY_PAID", "This service is already paid, so no reminder was sent");
+    }
+    const amount = toNumber(payment.amount);
+    if (job.invoice && toNumber(job.invoice.total) !== amount) {
+      throw conflict("BILL_CHANGED", "The bill has changed since this link was made, so no reminder was sent. Create a new payment request from the service job.");
+    }
+
+    const outcome = await NotificationService.sendPaymentRequest(await loadJobContext(payment.serviceJobId), amount, payment.paymentLink);
+    const reason = outcome.status === "SKIPPED" ? outcome.detail : outcome.status === "FAILED" ? outcome.code : null;
+    const result = outcome.status === "FAILED" && outcome.unconfirmed ? "could not be confirmed" : "was not sent";
+    await logActivity(actor, {
+      action: `PAYMENT_REMINDER_${outcome.status}`,
+      entityType: "Payment",
+      entityId: payment.id,
+      summary: reason ? `${actor.name}'s payment reminder for ${job.serviceNumber} ${result}: ${reason}` : `${actor.name} sent a payment reminder for ${job.serviceNumber}`,
+      metadata: { amount, ...(reason ? { reason } : {}) },
+    });
+    if (outcome.status === "SKIPPED") throw conflict("REMINDER_NOT_SENT", `No reminder was sent: ${outcome.detail}`);
+    if (outcome.status === "FAILED") throw whatsappFailure(outcome);
+    return { status: outcome.status };
   },
 
   async cancelOpenPayment(paymentId: string, providerName: string, orderId: string | null) {

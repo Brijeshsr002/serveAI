@@ -394,7 +394,8 @@ describe("parts", () => {
     expect((await call(addType, "POST", { cookie: rita, body: { name: "Air Horn", kind: "PART", rate: "450" } })).status).toBe(201);
     expect((await billPrices())["Air Horn"]).toBeUndefined();
     expect(await db.serviceType.findUniqueOrThrow({ where: { name: "Air Horn" } })).toMatchObject({ kind: "PART", rate: null, proposedBy: "Rita" });
-    expect((await call(addType, "POST", { cookie: rita, body: { name: "No Price", kind: "PART", rate: "" } })).status).toBe(400);
+    expect((await call(addType, "POST", { cookie: rita, body: { name: "No Price", kind: "PART", rate: "" } })).status).toBe(201);
+    expect(await db.serviceType.findUniqueOrThrow({ where: { name: "No Price" } })).toMatchObject({ rate: null, proposedRate: null, proposedBy: null });
     expect((await call(addType, "POST", { cookie: rita, body: { name: "New Service" } })).status).toBe(403);
     expect((await call(addType, "POST", { cookie: admin, body: { name: "Horn", kind: "PART" } })).status).toBe(409);
     expect((await call(addType, "POST", { cookie: admin, body: { name: "Plain Service", rate: "" } })).status).toBe(201);
@@ -403,16 +404,23 @@ describe("parts", () => {
 
   it("shows services and parts separately on the rates and service types pages", async () => {
     asUser(await makeUser("ADMIN", "Admin"));
-    const rates = await html(await RatesView());
-    expect(rates.indexOf("Car Wash")).toBeLessThan(rates.indexOf("Add part"));
-    expect(rates.indexOf("Add part")).toBeLessThan(rates.indexOf("Brake Pads"));
+    const rates = await html(await RatesView({}));
+    expect(rates).toContain("Car Wash");
+    expect(rates).not.toContain("Brake Pads");
+    const partRates = await html(await RatesView({ kind: "part" }));
+    expect(partRates).toContain("Brake Pads");
+    expect(partRates).not.toContain("Car Wash");
     for (const view of [undefined, "list"]) {
       const page = await ServiceTypesPage({ searchParams: Promise.resolve({ view }) });
       assertClientPropsSendable(page);
       const text = await html(page);
-      expect(text.indexOf(">Services<")).toBeLessThan(text.indexOf("Car Wash"));
-      expect(text.indexOf(">Parts<")).toBeGreaterThan(text.indexOf("Car Wash"));
-      expect(text.indexOf(">Parts<")).toBeLessThan(text.indexOf("Brake Pads"));
+      expect(text).toContain("Car Wash");
+      expect(text).not.toContain("Brake Pads");
+      const parts = await ServiceTypesPage({ searchParams: Promise.resolve({ view, kind: "part" }) });
+      assertClientPropsSendable(parts);
+      const partsText = await html(parts);
+      expect(partsText).toContain("Brake Pads");
+      expect(partsText).not.toContain("Car Wash");
     }
   });
 

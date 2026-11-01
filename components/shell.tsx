@@ -5,11 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Role } from "@prisma/client";
 import {
-  Activity, BarChart3, CalendarCheck, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
+  Activity, BarChart3, CalendarCheck, CheckCircle2, CreditCard, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
   Search, Settings, Tags, User, UserCog, Users, X, type LucideIcon,
 } from "lucide-react";
-import { FormDialog } from "@/components/actions";
-import { customerFields } from "@/components/forms-config";
 import { Input } from "@/components/ui/input";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
@@ -27,8 +25,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Kanban Board", "/admin/jobs", ListChecks],
     ["Employees", "/admin/employees", UserCog],
     ["Attendance", "/admin/attendance", CalendarCheck],
-    ["Payments", "/admin/payments", CreditCard],
-    ["Invoices", "/admin/invoices", FileText],
+    ["Billing", "/admin/billing", CreditCard],
     ["WhatsApp", "/admin/whatsapp", MessageCircle],
     ["Reports", "/admin/reports", BarChart3],
     ["Service Types", "/admin/service-types", Tags],
@@ -41,7 +38,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Customers", "/reception/customers", Users],
     ["Kanban Board", "/reception/jobs", ListChecks],
     ["Service Rates", "/reception/service-rates", Tags],
-    ["Payments", "/reception/payments", CreditCard],
+    ["Billing", "/reception/billing", CreditCard],
     ["WhatsApp", "/reception/whatsapp", MessageCircle],
     ["Profile", "/reception/profile", User],
   ],
@@ -52,6 +49,15 @@ const NAV: Record<Role, NavItem[]> = {
     ["Profile", "/worker/profile", User],
   ],
 };
+
+/** A vehicle's detail page belongs to Customers now that the two share a page. The same goes for staff under Employees and invoices under Billing. */
+export function navActive(href: string, pathname: string, base: string) {
+  return pathname === href
+    || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`))
+    || (href === `${base}/customers` && pathname.startsWith(`${base}/vehicles/`))
+    || (href === "/admin/employees" && pathname.startsWith("/admin/staff/"))
+    || (href === "/admin/billing" && pathname.startsWith("/admin/invoices/"));
+}
 
 type SearchResults = {
   customers: { id: string; name: string; phone: string }[];
@@ -124,8 +130,7 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
     <nav className="flex h-full flex-col gap-1 p-3" aria-label="Main">
       <Logo name={garage} light className="mb-4 ml-1 text-sm text-sidebar-foreground" />
       {items.map(([label, href, Icon]) => {
-        // A vehicle's detail page belongs to Customers now that the two share a page.
-        const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`)) || (href === `${base}/customers` && pathname.startsWith(`${base}/vehicles/`)) || (href === "/admin/employees" && pathname.startsWith("/admin/staff/"));
+        const active = navActive(href, pathname, base);
         return (
           <Link
             key={href}
@@ -170,12 +175,7 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2.5">
           <button aria-label="Open menu" className="p-1 lg:hidden" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
           {role === "WORKER" ? <Logo name={garage} className="text-xs lg:hidden" logoClassName="h-6" /> : <GlobalSearch base={base} />}
-          {role !== "WORKER" && (
-            <div className="ml-auto shrink-0">
-              <FormDialog trigger="+ Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />
-            </div>
-          )}
-          <LiveRefresh className={role === "WORKER" ? "ml-auto" : undefined} />
+          <LiveRefresh className="ml-auto" />
           <NotificationBell />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
