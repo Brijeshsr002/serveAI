@@ -35,8 +35,29 @@ function toLocalInput(value: unknown) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+/** What the form shows for a stored value, so a save can tell a real edit from a value that was only sitting there. */
+const shownValue = (f: FormField, value: unknown) =>
+  f.type === "datetime-local" ? toLocalInput(value) : value === null || value === undefined ? "" : String(value);
+
+/** With `initial`, leaves out every field still showing its initial value. */
+export function formValues(fields: FormField[], form: FormData, initial?: Record<string, unknown>) {
+  const body: Record<string, unknown> = {};
+  for (const f of fields) {
+    if (f.type === "checkbox") {
+      const checked = form.get(f.name) === "on";
+      if (!initial || checked !== Boolean(initial[f.name])) body[f.name] = checked;
+      continue;
+    }
+    const value = String(form.get(f.name) ?? "");
+    if (f.omitEmpty && !value) continue;
+    if (initial && value === shownValue(f, initial[f.name])) continue;
+    body[f.name] = f.type === "datetime-local" && value ? new Date(value).toISOString() : value;
+  }
+  return body;
+}
+
 export function FormDialog({
-  trigger, triggerLabel, triggerSize = "sm", title, endpoint, method = "POST", fields, initial = {}, extraBody, submitLabel = "Save", success = "Saved", variant = "default", redirectTo,
+  trigger, triggerLabel, triggerSize = "sm", title, endpoint, method = "POST", fields, initial = {}, onlyChanged = false, extraBody, submitLabel = "Save", success = "Saved", variant = "default", redirectTo,
 }: {
   trigger: React.ReactNode;
   /** Accessible name, for a trigger that is only an icon. */
@@ -47,6 +68,8 @@ export function FormDialog({
   method?: "POST" | "PATCH";
   fields: FormField[];
   initial?: Record<string, unknown>;
+  /** Send only what was edited, so a page that has gone stale can't put its old values back over someone else's change. */
+  onlyChanged?: boolean;
   /** Sent with the form values, for ids the person doesn't type. */
   extraBody?: Record<string, unknown>;
   submitLabel?: string;
@@ -63,16 +86,12 @@ export function FormDialog({
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const body: Record<string, unknown> = { ...extraBody };
-    for (const f of fields) {
-      if (f.type === "checkbox") {
-        body[f.name] = form.get(f.name) === "on";
-        continue;
-      }
-      const value = String(form.get(f.name) ?? "");
-      if (f.omitEmpty && !value) continue;
-      body[f.name] = f.type === "datetime-local" && value ? new Date(value).toISOString() : value;
+    const values = formValues(fields, form, onlyChanged ? initial : undefined);
+    if (onlyChanged && Object.keys(values).length === 0) {
+      setOpen(false);
+      return;
     }
+    const body = { ...extraBody, ...values };
     setBusy(true);
     setError("");
     try {
@@ -192,7 +211,7 @@ export function CopyButton({ text, label = "Copy link" }: { text: string; label?
   );
 }
 
-export function AssignControl({ jobId, workers, current }: { jobId: string; workers: { id: string; name: string; activeJobs: number; onLeave?: boolean }[]; current: string | null }) {
+export function AssignControl({ jobId, workers, current }: { jobId: string; workers: { id: string; name: string; activeJobs: number; onLeave?: boolean; startsOn?: string | null }[]; current: string | null }) {
   const router = useRouter();
   const [workerId, setWorkerId] = useState(current ?? "");
   const [busy, setBusy] = useState(false);

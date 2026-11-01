@@ -4,9 +4,9 @@ import { z } from "zod";
 import { logActivity, SYSTEM_ACTOR } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import type { SessionUser } from "@/lib/auth/session";
-import { db, nextServiceNumber } from "@/lib/db";
+import { db, lockUserRow, nextServiceNumber, type Tx } from "@/lib/db";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "@/lib/errors";
-import { dayKeyToDate, istDayKey } from "@/lib/format";
+import { dateToDayKey, dayKeyToDate, istDayKey } from "@/lib/format";
 import { loadJobContext, NotificationService } from "@/lib/notifications";
 import { PaymentService } from "@/lib/payments";
 import { generateInvoiceIfNeeded } from "@/lib/services/invoices";
@@ -115,6 +115,14 @@ export async function updateJob(actor: Actor, id: string, input: z.output<typeof
   return job;
 }
 
+const isActiveWorker = (u: { role: string; active: boolean } | null) => u?.role === "WORKER" && u.active;
+
+/** Locked, so a role change or deactivation can't commit between this read and the job being saved. */
+async function lockedStaff(tx: Tx, id: string) {
+  await lockUserRow(tx, id);
+  return tx.user.findUnique({ where: { id }, select: { name: true, role: true, active: true } });
+}
+
 /** `silent` keeps the customer out of it; `reason` goes on the logged move. */
 export async function assignWorker(actor: Actor, jobId: string, workerId: string, opts: { silent?: boolean; reason?: string } = {}) {
   const worker = await db.user.findUnique({ where: { id: workerId }, select: { id: true, name: true, role: true, active: true } });
@@ -128,6 +136,7 @@ export async function assignWorker(actor: Actor, jobId: string, workerId: string
 
   const firstAssignment = job.status === "NEW";
   const updated = await db.$transaction(async (tx) => {
+    if (!isActiveWorker(await lockedStaff(tx, workerId))) throw badRequest("INVALID_WORKER", "Select an active worker");
     const result = await tx.serviceJob.update({
       where: { id: jobId },
       data: { assignedWorkerId: workerId, status: firstAssignment ? "ASSIGNED" : undefined },
@@ -203,15 +212,28 @@ export async function changeStatus(
   const job = await db.serviceJob.findUnique({ where: { id: jobId } });
   if (!job) throw notFound("SERVICE_NOT_FOUND", "Service job not found");
 
-  const next = input.status;
   const override = Boolean(input.override);
-  assertStatusChangeAllowed(user, job, next, override, input.notes);
+  assertStatusChangeAllowed(user, job, input.status, override, input.notes);
 
+  let next = input.status;
   await db.$transaction(async (tx) => {
+    // Reopening a closed job for someone who has since left the workers would leave it where nobody can work it or
+    // see it. A closed job can't be reassigned first, so it goes back to New with nobody on it.
+    let notes = input.notes;
+    let unassign = false;
+    if (isTerminal(job.status) && !isTerminal(next) && job.assignedWorkerId) {
+      const holder = await lockedStaff(tx, job.assignedWorkerId);
+      if (!isActiveWorker(holder)) {
+        unassign = true;
+        next = "NEW";
+        const why = `${holder?.name ?? "The last worker"} is no longer an active worker, so the job went back to New to be assigned`;
+        notes = notes ? `${notes} (${why})` : why;
+      }
+    }
     // Matching on the old status makes two simultaneous clicks produce one change, not two.
     const { count } = await tx.serviceJob.updateMany({
       where: { id: jobId, status: job.status },
-      data: { status: next, actualCompletion: next === "COMPLETED" ? new Date() : null },
+      data: { status: next, actualCompletion: next === "COMPLETED" ? new Date() : null, ...(unassign ? { assignedWorkerId: null } : {}) },
     });
     if (count === 0) throw conflict("STATUS_CONFLICT", "This job was just updated by someone else. Refresh and retry.");
     await tx.serviceStatusHistory.create({
@@ -221,7 +243,7 @@ export async function changeStatus(
         newStatus: next,
         changedById: actor.id,
         changedByRole: actor.role,
-        notes: input.notes,
+        notes,
         isOverride: override,
       },
     });
@@ -232,7 +254,7 @@ export async function changeStatus(
         entityType: "ServiceJob",
         entityId: jobId,
         summary: `${actor.name} changed ${job.serviceNumber} from ${STATUS_LABEL[job.status]} to ${STATUS_LABEL[next]}${override ? " (override)" : ""}`,
-        metadata: { from: job.status, to: next, notes: input.notes ?? null },
+        metadata: { from: job.status, to: next, notes: notes ?? null },
       },
       tx,
     );
@@ -284,7 +306,7 @@ export function hideFromWorker<T extends { trackingToken: string; payments?: { p
   return { ...rest, ...(job.payments ? { payments: job.payments.map((p) => ({ ...p, paymentLink: null })) } : {}) };
 }
 
-/** Workers with their current load and leave on the given IST day (today by default), for the assign dropdown. */
+/** Workers with their current load, leave and start date on the given IST day (today by default), for the assign dropdown. startsOn is set only for someone who hasn't started by then. */
 export async function workersWithLoad(dayKey = istDayKey(new Date())) {
   const day = dayKeyToDate(dayKey);
   const workers = await db.user.findMany({
@@ -293,21 +315,25 @@ export async function workersWithLoad(dayKey = istDayKey(new Date())) {
     select: {
       id: true,
       name: true,
+      joinedOn: true,
       _count: { select: { assignedJobs: { where: { status: { in: ACTIVE_STATUSES } } } } },
       attendance: { where: { date: day, status: "LEAVE" }, select: { id: true } },
     },
   });
-  return workers.map((w) => ({ id: w.id, name: w.name, activeJobs: w._count.assignedJobs, onLeave: w.attendance.length > 0 }));
+  return workers.map((w) => {
+    const joined = w.joinedOn && dateToDayKey(w.joinedOn);
+    return { id: w.id, name: w.name, activeJobs: w._count.assignedJobs, onLeave: w.attendance.length > 0, startsOn: joined && joined > dayKey ? joined : null };
+  });
 }
 
 const AUTO_ACTOR: Actor = { ...SYSTEM_ACTOR, name: "Auto-assign" };
 
 const autoAssignOn = async () => (await db.setting.findUnique({ where: { key: "auto_assign_enabled" } }))?.value === "true";
 
-/** Who can take work on that day: fewest active jobs first, then by name so ties always go the same way. */
+/** Who can take work on that day, so nobody on leave or not started yet: fewest active jobs first, then by name so ties always go the same way. */
 const availableWorkers = async (dayKey?: string) =>
   (await workersWithLoad(dayKey))
-    .filter((w) => !w.onLeave)
+    .filter((w) => !w.onLeave && !w.startsOn)
     .sort((a, b) => a.activeJobs - b.activeJobs || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
 /** A failure here must not lose the job that was just created, so it only logs. Returns null when nothing was assigned. */

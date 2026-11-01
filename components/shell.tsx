@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import type { Role } from "@prisma/client";
 import {
   Activity, BarChart3, CalendarCheck, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
-  Search, Settings, ShieldCheck, Tags, User, Users, Wrench, X, type LucideIcon,
+  Search, Settings, Tags, User, UserCog, Users, X, type LucideIcon,
 } from "lucide-react";
 import { FormDialog } from "@/components/actions";
 import { customerFields } from "@/components/forms-config";
@@ -25,8 +25,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Dashboard", "/admin/dashboard", LayoutDashboard],
     ["Customers", "/admin/customers", Users],
     ["Kanban Board", "/admin/jobs", ListChecks],
-    ["Workers", "/admin/workers", Wrench],
-    ["Receptionists", "/admin/receptionists", ShieldCheck],
+    ["Employees", "/admin/employees", UserCog],
     ["Attendance", "/admin/attendance", CalendarCheck],
     ["Payments", "/admin/payments", CreditCard],
     ["Invoices", "/admin/invoices", FileText],
@@ -126,7 +125,7 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
       <Logo name={garage} light className="mb-4 ml-1 text-sm text-sidebar-foreground" />
       {items.map(([label, href, Icon]) => {
         // A vehicle's detail page belongs to Customers now that the two share a page.
-        const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`)) || (href === `${base}/customers` && pathname.startsWith(`${base}/vehicles/`));
+        const active = pathname === href || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`)) || (href === `${base}/customers` && pathname.startsWith(`${base}/vehicles/`)) || (href === "/admin/employees" && pathname.startsWith("/admin/staff/"));
         return (
           <Link
             key={href}

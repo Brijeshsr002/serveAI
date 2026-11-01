@@ -92,11 +92,13 @@ Workers only see and change jobs assigned to them. Anything else returns 404.
 | POST | `/api/service-jobs/:id/items` | Staff, assigned worker | `itemType`* (`PART`, `LABOUR`, `SERVICE`), `name`*, `unitPrice`*, `quantity`, `description`, `tax`, `discount`, `notifyCustomer`. Workers can't set tax or discount, and the customer is always told | 409 `SERVICE_ALREADY_PAID`, 409 `SERVICE_CLOSED`, 409 `PAYMENT_PENDING` |
 | PATCH | `/api/service-jobs/:id/items/:itemId` | Staff, assigned worker | Same as POST | 404 `ITEM_NOT_FOUND`, same 409s as POST |
 | DELETE | `/api/service-jobs/:id/items/:itemId` | Staff, assigned worker | `?notify=1` tells the customer when staff remove a line | 404 `ITEM_NOT_FOUND`, same 409s as POST |
-| GET | `/api/workers` | Staff | Workers with `activeJobs` | |
+| GET | `/api/workers` | Staff | Workers with `activeJobs`, `onLeave` and `startsOn` (a date, only for someone who hasn't started yet) | |
 
 `tax` and `discount` on items are rupee amounts, not percentages.
 
 **Status errors:** 422 `INVALID_STATUS_TRANSITION`, 409 `STATUS_UNCHANGED`, 409 `STATUS_CONFLICT` (someone else just changed it), 400 `OVERRIDE_REASON_REQUIRED`, 403 `FORBIDDEN`. Rules are in [ARCHITECTURE.md](ARCHITECTURE.md#status-workflow).
+
+An override that reopens a closed job whose worker is no longer an active worker clears the worker and sets the job to `NEW`, whatever status was asked for. The history entry says why. The response carries the status the job actually has.
 
 Example:
 
@@ -169,15 +171,20 @@ Days are IST calendar days and clock times come from the server. No record means
 
 ## Administration
 
-Salary and staff notes are only read and written through `/api/users/:id/profile`. Other user endpoints never return them.
+Salary and staff notes are read and written through `/api/users/:id/profile`. The admin-only `/api/employees` endpoints also return or set salary, but never notes. Other user endpoints never return either.
+
+Admin accounts aren't employees: no endpoint here can create one or give anyone the role. Use `npm run admin:create`.
 
 | Method | URL | Access | Body or query | Errors |
 |---|---|---|---|---|
+| GET | `/api/employees` | Admin | `?q=` (name, phone or email), `?month=yyyy-mm`, default this month. Workers and receptionists with salary, today's attendance, the month's attendance and performance | 400 `INVALID_MONTH` |
+| POST | `/api/employees` | Admin | `role`* (`WORKER` or `RECEPTIONIST`), `name`*, `email`*, `password`*, `phone`, `jobTitle`, `salary`, `joinedOn` | 400 on any other role, 409 `DUPLICATE_EMAIL` |
+| GET | `/api/employees/report` | Admin | `?month=yyyy-mm`, default this month. CSV of all employees | 400 `INVALID_MONTH` |
 | GET | `/api/users/:id/profile` | Admin | Worker or receptionist, with salary and notes | 404 `STAFF_NOT_FOUND` |
-| PATCH | `/api/users/:id/profile` | Admin | Any of `name`, `email`, `phone`, `jobTitle`, `salary`, `joinedOn`, `address`, `emergencyContact`, `staffNotes`, `active`, `password` | 404 `STAFF_NOT_FOUND`, 409 `DUPLICATE_EMAIL`, `WORKER_HAS_ACTIVE_JOBS` |
+| PATCH | `/api/users/:id/profile` | Admin | Any of `role` (`WORKER` or `RECEPTIONIST`), `name`, `email`, `phone`, `jobTitle`, `salary`, `joinedOn`, `address`, `emergencyContact`, `staffNotes`, `active`, `password` | 404 `STAFF_NOT_FOUND`, 409 `DUPLICATE_EMAIL`, `WORKER_HAS_ACTIVE_JOBS` |
 | GET | `/api/users` | Admin | `?role=` | |
-| POST | `/api/users` | Admin | `name`*, `email`*, `role`*, `password`*, `phone` | 409 `DUPLICATE_EMAIL` |
-| PATCH | `/api/users/:id` | Admin | Any of those, plus `active` | 400 `CANNOT_CHANGE_SELF`, 409 `WORKER_HAS_ACTIVE_JOBS` |
+| POST | `/api/users` | Admin | `name`*, `email`*, `role`* (`WORKER` or `RECEPTIONIST`), `password`*, `phone` | 409 `DUPLICATE_EMAIL` |
+| PATCH | `/api/users/:id` | Admin | Any of those, plus `active` | 400 `CANNOT_CHANGE_SELF`, `ROLE_NOT_ALLOWED`, 409 `WORKER_HAS_ACTIVE_JOBS` |
 | DELETE | `/api/users/:id` | Admin | Deactivates the user | 400 `CANNOT_CHANGE_SELF`, 409 `WORKER_HAS_ACTIVE_JOBS` |
 | POST | `/api/profile/password` | All | `currentPassword`*, `newPassword`* | 400 `WRONG_PASSWORD` |
 | GET | `/api/service-types` | Staff | `?kind=PART` or `ALL`; services only by default | |

@@ -33,6 +33,7 @@ const { default: StaffPage } = await import("@/app/admin/staff/[id]/page");
 const { default: WorkerProfile } = await import("@/app/worker/profile/page");
 const { default: ReceptionProfile } = await import("@/app/reception/profile/page");
 const { default: WorkerDashboard } = await import("@/app/worker/dashboard/page");
+const { default: EmployeesPage } = await import("@/app/admin/employees/page");
 const { default: WorkersPage } = await import("@/app/admin/workers/page");
 const { default: ReceptionistsPage } = await import("@/app/admin/receptionists/page");
 const { default: ActivityPage } = await import("@/app/admin/activity/page");
@@ -173,6 +174,7 @@ describe("attendance and staff pages", () => {
   describe("page guards", () => {
     const empty = Promise.resolve({});
     const adminOnly: [string, () => Promise<unknown>][] = [
+      ["employees", () => EmployeesPage({ searchParams: empty })],
       ["workers", () => WorkersPage({ searchParams: empty })],
       ["receptionists", () => ReceptionistsPage({ searchParams: empty })],
       ["activity", () => ActivityPage()],
@@ -193,8 +195,9 @@ describe("attendance and staff pages", () => {
 
     it("an admin still gets the staff lists and the audit trail", async () => {
       asUser(admin);
-      expect(await html((await WorkersPage({ searchParams: empty })) as ReactElement)).toContain("raj@test.local");
-      expect(await html((await ReceptionistsPage({ searchParams: empty })) as ReactElement)).toContain("rita@test.local");
+      const employees = await html((await EmployeesPage({ searchParams: empty })) as ReactElement);
+      expect(employees).toContain("raj@test.local");
+      expect(employees).toContain("rita@test.local");
       expect(await html(await ActivityPage())).toContain("Audit trail");
     });
 

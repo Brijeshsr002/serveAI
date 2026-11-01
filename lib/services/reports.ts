@@ -31,6 +31,9 @@ export async function dashboardStats() {
   };
 }
 
+/** Everyone with a bar on the worker chart. Someone moved to reception keeps theirs, because the jobs they did still count. */
+const hasWorkerRecord: Prisma.UserWhereInput = { OR: [{ role: "WORKER" }, { assignedJobs: { some: {} } }] };
+
 const dayFormat = (options: Intl.DateTimeFormatOptions, key: string) =>
   new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", ...options }).format(new Date(`${key}T12:00:00+05:30`));
 
@@ -45,7 +48,7 @@ export async function chartData() {
     db.serviceJob.groupBy({ by: ["serviceType"], _count: true, orderBy: { _count: { serviceType: "desc" } }, take: 8 }),
     db.payment.findMany({ where: { status: "PAID", paidAt: { gte: monthlyStart } }, select: { amount: true, paidAt: true } }),
     db.serviceJob.groupBy({ by: ["assignedWorkerId", "status"], where: { assignedWorkerId: { not: null } }, _count: true }),
-    db.user.findMany({ where: { role: "WORKER" }, select: { id: true, name: true } }),
+    db.user.findMany({ where: hasWorkerRecord, select: { id: true, name: true } }),
   ]);
 
   const daily = new Map<string, number>();
@@ -156,7 +159,7 @@ export async function drilldown({ kind, value, bucket }: z.output<typeof drilldo
     title = `${value} services`;
     where = { serviceType: value };
   } else {
-    const worker = await db.user.findFirst({ where: { id: value, role: "WORKER" }, select: { name: true } });
+    const worker = await db.user.findFirst({ where: { id: value, ...hasWorkerRecord }, select: { name: true } });
     if (!worker) throw notFound("WORKER_NOT_FOUND", "Worker not found");
     title = `${worker.name}'s ${WORKER_BUCKETS[bucket].label}`;
     where = { assignedWorkerId: value, ...WORKER_BUCKETS[bucket].where };

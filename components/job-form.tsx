@@ -20,7 +20,7 @@ export function NewJobDialog({
 }: {
   customers: Customer[];
   serviceTypes: string[];
-  workers: { id: string; name: string; activeJobs: number; onLeave?: boolean }[];
+  workers: { id: string; name: string; activeJobs: number; onLeave?: boolean; startsOn?: string | null }[];
   base: string;
   presetCustomerId?: string;
   presetVehicleId?: string;

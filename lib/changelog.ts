@@ -88,6 +88,18 @@ export const CHANGELOG: { version: string; date: string; changes: string[] }[] =
       "Customer search also finds vehicle makes and models, and old vehicle links keep their search and list view.",
     ],
   },
+  {
+    version: "1.7",
+    date: "2026-11-01",
+    changes: [
+      "One Employees page replaces Workers and Receptionists, with each person's salary, today's attendance, this month's attendance and performance.",
+      "Choose Worker or Receptionist when adding someone, and change it later by dragging their card or editing them. A worker with active jobs has to hand them over first.",
+      "Download report gives a CSV of all employees for any month, and the same figures show on each profile.",
+      "Editing someone now saves only what you changed, so an out-of-date page can't undo a role change or bring back someone who was deactivated.",
+      "Someone who joins on a future date isn't auto-assigned work until they start, and the assign list shows their start date.",
+      "Someone moved to reception keeps their past jobs on the worker chart and CSV. Reopening one of their closed jobs sends it back to New to be assigned.",
+    ],
+  },
 ];
 
 export const LATEST_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

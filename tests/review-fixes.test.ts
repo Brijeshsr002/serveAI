@@ -36,7 +36,6 @@ const { default: VehiclesPage } = await import("@/app/admin/vehicles/page");
 const { default: ServiceTypesPage } = await import("@/app/admin/service-types/page");
 const { canDrop, DataBoard } = await import("@/components/data-board-client");
 const { SimpleTable } = await import("@/components/ui-kit");
-const { workerDropTo } = await import("@/components/users-view");
 
 /** Every element in a server page's tree, including ones handed over as props. */
 function elements(node: unknown, found: ReactElement<Record<string, unknown>>[] = []) {
@@ -282,7 +281,7 @@ describe("list rows", () => {
       "app/admin/jobs/[id]/page.tsx",
       "app/worker/jobs/[id]/page.tsx",
       "components/rates-view.tsx",
-      "components/users-view.tsx",
+      "components/employees-view.tsx",
     ]) {
       expect(readFileSync(file, "utf8"), file).toContain("rowKeys={");
     }
@@ -316,13 +315,6 @@ describe("dropping a card", () => {
     expect(canDrop({ dropTo: ["c"] }, "a", column("b", { active: true }))).toBe(false);
     expect(canDrop({ dropTo: ["b"] }, "a", column("b", { active: true }))).toBe(true);
     expect(canDrop({ dropTo: [] }, "a", column("b", { active: true }))).toBe(false);
-  });
-
-  it("sends a worker only where saving would put them", () => {
-    expect(workerDropTo(true, 2)).toEqual(["off"]);
-    expect(workerDropTo(true, 0)).toEqual(["off"]);
-    expect(workerDropTo(false, 0)).toEqual(["free"]);
-    expect(workerDropTo(false, 2)).toEqual(["busy"]);
   });
 
   it("won't let a service with a request waiting leave that column", async () => {

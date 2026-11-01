@@ -19,6 +19,7 @@ Customer ⇄ WhatsApp ⇄ Sendiee ⇄ ServAI ⇄ Reception / Admin → Worker
 | WhatsApp | Inbox, automatic status updates, customer commands, AI intake webhook |
 | Billing | Service items, invoices with PDF, payment links, signed payment webhooks |
 | Tracking | Public page per job, secured by a random token |
+| Employees | One admin page for workers and receptionists: role, salary, attendance, performance and a monthly CSV report |
 | Admin | Dashboard, charts, reports, CSV export, audit log, settings |
 
 ## Tech stack

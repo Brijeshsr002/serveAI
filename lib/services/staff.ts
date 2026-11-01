@@ -7,15 +7,15 @@ import { db, isUniqueViolation } from "@/lib/db";
 import { conflict, notFound } from "@/lib/errors";
 import { dateToDayKey, dayKeyToDate, isDayKey, istMonthKey, monthRangeIST, toNumber } from "@/lib/format";
 import { ATTENDANCE_ROLES, attendanceStart, recordActiveChange, staffStartKey } from "@/lib/services/attendance";
-import { assertNoActiveJobs, passwordField, userFieldSchemas, userSelect } from "@/lib/services/users";
+import { assertNoActiveJobs, assertRoleChange, moveNotificationLinks, passwordField, recheckActiveJobs, staffRoleField, userFieldSchemas, userSelect } from "@/lib/services/users";
 import { ACTIVE_STATUSES } from "@/lib/status";
 
 const MAX_SALARY = 9_999_999_999.99;
 
-const text = (max: number) => z.string().trim().max(max).optional().nullable().transform((v) => v || null);
+export const text = (max: number) => z.string().trim().max(max).optional().nullable().transform((v) => v || null);
 
 /** Forms send "" for blank. Stored as a string so no float reaches the Decimal column. */
-const salaryField = z.union([
+export const salaryField = z.union([
   z.literal("").transform(() => null),
   z.null(),
   z.number().transform(String),
@@ -28,17 +28,18 @@ const salaryField = z.union([
     .nullable(),
 );
 
-const joinedOnField = z.union([
+export const joinedOnField = z.union([
   z.literal("").transform(() => null),
   z.null(),
   z.string().refine(isDayKey, "Enter a valid date"),
 ]);
 
-/** Role isn't here on purpose: this route can't promote anyone. */
+/** Role can only be worker or receptionist here: this route can't promote anyone. */
 export const staffProfileSchema = z.object({
   name: userFieldSchemas.name,
   email: userFieldSchemas.email,
   phone: userFieldSchemas.phone,
+  role: staffRoleField,
   jobTitle: text(120),
   salary: salaryField,
   joinedOn: joinedOnField,
@@ -85,6 +86,7 @@ export async function getStaffProfile(id: string) {
 export async function updateStaffProfile(actor: Actor, id: string, input: z.output<typeof staffProfileSchema>) {
   const before = await getStaffProfile(id);
   if (!before) throw notFound("STAFF_NOT_FOUND", "Staff member not found");
+  if (input.role) await assertRoleChange(before, input.role);
   if (input.active === false && before.active) await assertNoActiveJobs(id);
 
   const { password, salary, joinedOn, ...rest } = input;
@@ -92,6 +94,7 @@ export async function updateStaffProfile(actor: Actor, id: string, input: z.outp
   const passwordHash = password ? await bcrypt.hash(password, 12) : null;
   try {
     await db.$transaction(async (tx) => {
+      await recheckActiveJobs(tx, id, input);
       await tx.user.update({
         where: { id },
         data: {
@@ -102,6 +105,7 @@ export async function updateStaffProfile(actor: Actor, id: string, input: z.outp
         },
       });
       if (input.active !== undefined) await recordActiveChange(tx, id, input.active);
+      if (input.role) await moveNotificationLinks(tx, id, before.role, input.role);
     });
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict("DUPLICATE_EMAIL", "A user with this email already exists");
@@ -112,7 +116,7 @@ export async function updateStaffProfile(actor: Actor, id: string, input: z.outp
     action: "STAFF_PROFILE_UPDATED",
     entityType: "User",
     entityId: id,
-    summary: `${actor.name} updated ${before.name}'s staff profile${changed.includes("salary") ? " (salary changed)" : ""}`,
+    summary: `${actor.name} updated ${before.name}'s staff profile${changed.includes("salary") ? " (salary changed)" : ""}${changed.includes("role") ? ` (now ${input.role === "WORKER" ? "a worker" : "a receptionist"})` : ""}`,
     metadata: { fields: changed, passwordChanged: Boolean(password) },
   });
   return (await getStaffProfile(id))!;

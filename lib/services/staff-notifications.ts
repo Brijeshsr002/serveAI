@@ -7,7 +7,7 @@ type Amount = Parameters<typeof rupees>[0];
 
 export const markReadSchema = z.object({ ids: z.array(z.string().min(1)).max(100).optional() });
 
-const RATES_PAGE: Record<Role, string> = {
+export const RATES_PAGE: Record<Role, string> = {
   ADMIN: "/admin/service-types",
   RECEPTIONIST: "/reception/service-rates",
   WORKER: "/worker/service-rates",

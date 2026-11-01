@@ -48,7 +48,7 @@ export function JobBoard({ jobs, counts, base, workers, serviceTypes }: {
   /** Totals per status, which can exceed the cards loaded. */
   counts: Partial<Record<ServiceStatus, number>>;
   base: string;
-  workers: { id: string; name: string; activeJobs: number; onLeave: boolean }[];
+  workers: { id: string; name: string; activeJobs: number; onLeave: boolean; startsOn?: string | null }[];
   serviceTypes: string[];
 }) {
   const router = useRouter();

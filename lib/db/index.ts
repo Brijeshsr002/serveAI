@@ -22,6 +22,14 @@ export async function nextSequence(key: string, client: DbClient = db): Promise<
   return rows[0].value;
 }
 
+/**
+ * Holds one user's row until the transaction ends. Whatever changes someone's role or active flag and whatever
+ * gives them a job both take this first, so one always sees what the other committed. Plain reads would miss each other.
+ */
+export async function lockUserRow(tx: Tx, id: string) {
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR NO KEY UPDATE`;
+}
+
 const pad = (n: number) => String(n).padStart(6, "0");
 
 export const nextCustomerCode = async (c: DbClient = db) => `CUS-${pad(await nextSequence("customer", c))}`;

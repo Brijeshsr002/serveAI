@@ -187,29 +187,35 @@ export async function personMonthSummary(person: { id: string; startKey: string;
   return summarizeMonth(month, { ...person, inactive }, rows);
 }
 
-export async function teamMonthSummaries(month = istMonthKey(new Date())) {
+/** One query per table however many people are passed, so a whole list can be summarized at once. */
+export async function monthSummariesFor(
+  staff: { id: string; active: boolean; joinedOn: Date | null; createdAt: Date }[],
+  month = istMonthKey(new Date()),
+  today = todayKey(),
+) {
   const dates = monthWhere(month);
-  const [staff, rows, floor, inactive] = await Promise.all([
-    db.user.findMany({
-      // Inactive staff are only listed for a month they have real records in.
-      where: { role: { in: ATTENDANCE_ROLES }, OR: [{ active: true }, { attendance: { some: { date: dates } } }] },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, active: true, joinedOn: true, createdAt: true },
-    }),
+  const [rows, floor, inactive] = await Promise.all([
     db.attendance.findMany({ where: { date: dates }, select: { userId: true, date: true, status: true } }),
     attendanceStart(),
     db.staffInactivePeriod.findMany({ where: overlapping(dates.gte, dates.lte) }),
   ]);
-  return staff.map((u) => ({
-    userId: u.id,
-    name: u.name,
-    active: u.active,
-    summary: summarizeMonth(
-      month,
-      { startKey: staffStartKey(u, floor), active: u.active, inactive: inactive.filter((p) => p.userId === u.id).map(toPeriod) },
-      rows.filter((r) => r.userId === u.id),
-    ),
-  }));
+  return new Map(staff.map((u) => [u.id, summarizeMonth(
+    month,
+    { startKey: staffStartKey(u, floor), active: u.active, inactive: inactive.filter((p) => p.userId === u.id).map(toPeriod) },
+    rows.filter((r) => r.userId === u.id),
+    today,
+  )]));
+}
+
+export async function teamMonthSummaries(month = istMonthKey(new Date())) {
+  const staff = await db.user.findMany({
+    // Inactive staff are only listed for a month they have real records in.
+    where: { role: { in: ATTENDANCE_ROLES }, OR: [{ active: true }, { attendance: { some: { date: monthWhere(month) } } }] },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, active: true, joinedOn: true, createdAt: true },
+  });
+  const summaries = await monthSummariesFor(staff, month);
+  return staff.map((u) => ({ userId: u.id, name: u.name, active: u.active, summary: summaries.get(u.id)! }));
 }
 
 /** Newest first. Days without a record are only filled in as absent for active staff. */

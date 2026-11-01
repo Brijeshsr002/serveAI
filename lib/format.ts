@@ -29,9 +29,9 @@ export function time(d: Date | string) {
   return new Intl.DateTimeFormat("en-IN", { timeStyle: "short", timeZone: TZ }).format(new Date(d));
 }
 
-/** Assign dropdown text. Someone on leave can still be picked by hand, so the list says so. */
-export const workerLoadLabel = (w: { name: string; activeJobs: number; onLeave?: boolean }) =>
-  w.onLeave ? `${w.name} (on leave)` : `${w.name} (${w.activeJobs} active)`;
+/** Assign dropdown text. Someone on leave or not started yet can still be picked by hand, so the list says so. */
+export const workerLoadLabel = (w: { name: string; activeJobs: number; onLeave?: boolean; startsOn?: string | null }) =>
+  w.startsOn ? `${w.name} (starts ${date(w.startsOn)})` : w.onLeave ? `${w.name} (on leave)` : `${w.name} (${w.activeJobs} active)`;
 
 /** Start of the given day in IST, as a UTC instant. The workshop's "today" is an IST day. */
 export function startOfDayIST(d = new Date()) {
@@ -66,6 +66,9 @@ export const dayHeading = (key: string) => formatDayKey(key, { weekday: "long", 
 export const dayShort = (key: string) => formatDayKey(key, { weekday: "short", month: "short", day: "numeric" });
 /** "November 2026" */
 export const monthLabel = (month: string) => formatDayKey(`${month}-01`, { month: "long", year: "numeric" });
+
+/** A real yyyy-mm month. Years outside 20xx are refused because they can only be typos. */
+export const isMonthKey = (v: unknown): v is string => typeof v === "string" && /^20\d{2}-(0[1-9]|1[0-2])$/.test(v);
 
 /** Last calendar day of a yyyy-mm month, as yyyy-mm-dd. */
 export function lastDayOfMonth(month: string) {

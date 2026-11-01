@@ -63,25 +63,43 @@ export const jobEditFields: FormField[] = [
   { name: "expectedCompletion", label: "Expected completion", type: "datetime-local" },
 ];
 
-export const staffProfileFields: FormField[] = [
-  { name: "name", label: "Name", required: true },
-  { name: "phone", label: "Phone", type: "tel" },
-  { name: "email", label: "Email", type: "email", required: true },
+const employeeRoleOptions = [{ value: "WORKER", label: "Worker" }, { value: "RECEPTIONIST", label: "Receptionist" }];
+const employeeRoleField: FormField = { name: "role", label: "Role", type: "select", required: true, options: employeeRoleOptions };
+const employeeJobFields: FormField[] = [
   { name: "jobTitle", label: "Job title", placeholder: "Senior mechanic" },
   { name: "salary", label: "Monthly salary (₹)", type: "number" },
   { name: "joinedOn", label: "Joined on", type: "date" },
-  { name: "address", label: "Address", type: "textarea" },
-  { name: "emergencyContact", label: "Emergency contact" },
-  { name: "staffNotes", label: "Notes (admin only, never shown to staff)", type: "textarea" },
+];
+const employeeContactFields: FormField[] = [
+  { name: "name", label: "Name", required: true },
+  { name: "phone", label: "Phone", type: "tel" },
+  { name: "email", label: "Email", type: "email", required: true },
+];
+const employeeAccountFields: FormField[] = [
   { name: "active", label: "Active", type: "checkbox" },
   { name: "password", label: "New password (leave blank to keep)", type: "password", omitEmpty: true },
 ];
 
+/** The blank first option makes the browser insist on a choice, so nobody becomes a worker by default. */
+export const employeeCreateFields: FormField[] = [
+  { ...employeeRoleField, options: [{ value: "", label: "Select a role" }, ...employeeRoleOptions] },
+  ...employeeContactFields,
+  { name: "password", label: "Initial password (8+ characters)", type: "password", required: true },
+  ...employeeJobFields,
+];
+
+/** The pencil on the Employees page. Address, emergency contact and notes stay on the profile page, and the save leaves them alone. */
+export const employeeEditFields: FormField[] = [employeeRoleField, ...employeeContactFields, ...employeeJobFields, ...employeeAccountFields];
+
+export const staffProfileFields: FormField[] = [
+  employeeRoleField,
+  ...employeeContactFields,
+  ...employeeJobFields,
+  { name: "address", label: "Address", type: "textarea" },
+  { name: "emergencyContact", label: "Emergency contact" },
+  { name: "staffNotes", label: "Notes (admin only, never shown to staff)", type: "textarea" },
+  ...employeeAccountFields,
+];
+
 export const attendanceNoteField: FormField[] = [{ name: "note", label: "Note (optional)", type: "textarea" }];
 
-export const userFields = (role: "WORKER" | "RECEPTIONIST"): FormField[] => [
-  { name: "name", label: "Name", required: true },
-  { name: "email", label: "Email", type: "email", required: true },
-  { name: "phone", label: "Phone", type: "tel" },
-  { name: "role", label: "Role", type: "select", options: [{ value: role, label: role === "WORKER" ? "Worker" : "Receptionist" }] },
-];
