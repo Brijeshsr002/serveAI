@@ -11,7 +11,7 @@ export default async function LoginPage() {
   if (user) redirect(roleHome[user.role]);
   const { center_name } = await getSettings();
   return (
-    <LiveScene clips={["engine-repair", "paint-booth", "jet-wash", "open-road"]} className="min-h-screen" overlay="bg-gradient-to-r from-black/70 via-black/40 to-black/10">
+    <LiveScene clips={["engine-repair", "oil-service", "paint-booth", "jet-wash", "open-road"]} className="min-h-screen" overlay="bg-gradient-to-r from-black/70 via-black/40 to-black/10">
       <main className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 p-5 lg:grid-cols-[1fr_24rem] lg:p-10">
         <div>
           <Logo name={center_name} light className="text-xl lg:text-2xl" logoClassName="h-16 lg:h-20" />
