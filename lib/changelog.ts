@@ -75,6 +75,19 @@ export const CHANGELOG: { version: string; date: string; changes: string[] }[] =
       "This Updates page.",
     ],
   },
+  {
+    version: "1.6",
+    date: "2026-11-01",
+    changes: [
+      "Approving or rejecting a rate now applies only to the amount on your screen. If someone changed it, you're asked to check again.",
+      "The starting service prices wait for an admin's approval in Service Types before customers are quoted them.",
+      "A new booking is auto-assigned to someone who isn't on leave on the booked day.",
+      "Hidden services and parts no longer appear on the bill form, and new services added in Service Types do.",
+      "Open forms stay open while the page updates itself, and stay with the right customer or item.",
+      "The approval tick on the bill form starts clear each time, and Kanban cards can only be dragged where they can really go.",
+      "Customer search also finds vehicle makes and models, and old vehicle links keep their search and list view.",
+    ],
+  },
 ];
 
 export const LATEST_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

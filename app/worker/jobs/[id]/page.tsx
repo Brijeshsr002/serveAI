@@ -6,7 +6,7 @@ import { canEditBill, toWorkItem, WorkerActions } from "@/components/worker-job-
 import { requireRole } from "@/lib/auth/page";
 import { dateTime, money } from "@/lib/format";
 import { getJobForUser } from "@/lib/services/jobs";
-import { activePartNames, billPrices } from "@/lib/services/service-rates";
+import { billCatalog } from "@/lib/services/service-rates";
 import { isTerminal, STATUS_LABEL, workerNextStatuses } from "@/lib/status";
 import { VoiceStatus } from "@/components/voice-status";
 
@@ -16,8 +16,7 @@ export default async function WorkerJobPage({ params }: { params: Promise<{ id: 
   const job = await getJobForUser(user, id).catch(() => null);
   if (!job) notFound();
   const canEdit = canEditBill(job);
-  const prices = await billPrices();
-  const parts = await activePartNames();
+  const catalog = await billCatalog();
   return (
     <>
       <PageHeader title={job.serviceNumber} subtitle={job.serviceType}><StatusBadge status={job.status} /></PageHeader>
@@ -26,19 +25,20 @@ export default async function WorkerJobPage({ params }: { params: Promise<{ id: 
         <VoiceStatus jobId={job.id} options={workerNextStatuses(job.status)} />
         <Section
           title="Parts and extra work"
-          action={canEdit && <WorkItemDialog jobId={job.id} prices={prices} parts={parts} trigger={<><Plus className="size-3.5" /> Add issue, service or part</>} />}
+          action={canEdit && <WorkItemDialog jobId={job.id} {...catalog} trigger={<><Plus className="size-3.5" /> Add issue, service or part</>} />}
         >
           {canEdit && <p className="mb-3 text-sm text-muted-foreground">Extra work goes to the customer on WhatsApp, and joins the bill when they say yes.</p>}
           {!canEdit && !isTerminal(job.status) && <p className="mb-3 text-sm text-muted-foreground">The bill is with the customer. Ask reception to change it.</p>}
           <SimpleTable
             headers={["Item", "Qty", "Cost", ""]}
             empty="Nothing added yet"
+            rowKeys={job.items.map((i) => i.id)}
             rows={job.items.map((i) => [
               <div key="n">{i.name}<ApprovalBadge approval={i.approval} /></div>,
               Number(i.quantity),
               money(i.total),
               canEdit && (
-                <WorkItemDialog key="x" jobId={job.id} item={toWorkItem(i)} prices={prices} parts={parts} variant="ghost" triggerSize="icon-sm" triggerLabel={`Edit ${i.name}`} trigger={<Pencil className="size-3.5" />} />
+                <WorkItemDialog key="x" jobId={job.id} item={toWorkItem(i)} {...catalog} variant="ghost" triggerSize="icon-sm" triggerLabel={`Edit ${i.name}`} trigger={<Pencil className="size-3.5" />} />
               ),
             ])}
           />

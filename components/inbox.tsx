@@ -6,12 +6,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client";
+import { liveRefreshPaused } from "@/lib/live-refresh";
 
 /** New inbound messages arrive by webhook; re-render the server component to pick them up. */
 export function InboxAutoRefresh() {
   const router = useRouter();
   useEffect(() => {
-    const timer = setInterval(() => router.refresh(), 15_000);
+    const timer = setInterval(() => {
+      if (!liveRefreshPaused(document)) router.refresh();
+    }, 15_000);
     return () => clearInterval(timer);
   }, [router]);
   return null;

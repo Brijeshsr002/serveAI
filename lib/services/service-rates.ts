@@ -8,10 +8,11 @@ import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import { toNumber } from "@/lib/format";
 import { notifyRateChanged, notifyRateRejected, notifyRateRequested } from "@/lib/services/staff-notifications";
 import { getSettings } from "@/lib/settings";
-import { parsePriceList } from "@/lib/work-catalog";
+import { parsePriceList, UNCATALOGUED_WORK_NAMES } from "@/lib/work-catalog";
 
 export const rateSchema = z.object({ rate: z.coerce.number().min(0).max(100_000_000) });
-export const rateDecisionSchema = z.object({ approve: z.boolean() });
+/** `proposedRate` is the amount the admin was looking at. A decision only ever applies to that amount. */
+export const rateDecisionSchema = z.object({ approve: z.boolean(), proposedRate: z.coerce.number().min(0).max(100_000_000) });
 export const catalogItemSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional().nullable(),
@@ -69,23 +70,25 @@ export async function changeRate(user: Pick<SessionUser, "role">, actor: Actor, 
   return saved;
 }
 
-export async function decideRate(actor: Actor, id: string, approve: boolean) {
+export async function decideRate(actor: Actor, id: string, approve: boolean, seen: number) {
   const type = await db.serviceType.findUnique({ where: { id } });
   if (!type) throw notFound("SERVICE_TYPE_NOT_FOUND", "Service type not found");
   if (type.proposedRate === null) throw conflict("NO_RATE_REQUEST", "There's no rate change waiting on this item");
-  const saved = await db.serviceType.update({
-    where: { id },
-    data: { ...(approve ? { rate: type.proposedRate } : {}), proposedRate: null, proposedBy: null, proposedById: null, proposedAt: null },
+  // Matching on the amount means a request changed after the page loaded is never decided unseen, even mid-click.
+  const { count } = await db.serviceType.updateMany({
+    where: { id, proposedRate: seen },
+    data: { ...(approve ? { rate: seen } : {}), proposedRate: null, proposedBy: null, proposedById: null, proposedAt: null },
   });
+  if (count === 0) throw conflict("RATE_REQUEST_CHANGED", `The ${type.name} request has changed. Check the new amount and decide again.`);
   await logActivity(actor, {
     action: approve ? "SERVICE_RATE_APPROVED" : "SERVICE_RATE_REJECTED",
     entityType: "ServiceType",
     entityId: id,
-    summary: `${actor.name} ${approve ? "approved" : "rejected"} ${type.proposedBy ?? "a"} change of the ${type.name} rate to ₹${toNumber(type.proposedRate)}`,
+    summary: `${actor.name} ${approve ? "approved" : "rejected"} ${type.proposedBy ?? "a"} change of the ${type.name} rate to ₹${seen}`,
   });
-  if (!approve) await notifyRateRejected({ id: type.proposedById, name: type.proposedBy }, type.name, type.proposedRate);
-  else if (type.rate === null || toNumber(type.rate) !== toNumber(type.proposedRate)) await notifyRateChanged(type.name, type.proposedRate);
-  return saved;
+  if (!approve) await notifyRateRejected({ id: type.proposedById, name: type.proposedBy }, type.name, seen);
+  else if (type.rate === null || toNumber(type.rate) !== seen) await notifyRateChanged(type.name, seen);
+  return db.serviceType.findUniqueOrThrow({ where: { id } });
 }
 
 /** The default price for a service, if it has one. Never includes changes still waiting for approval, or a part's price. */
@@ -100,14 +103,30 @@ export async function ratedServices() {
   return types.map((t) => ({ name: t.name, rate: toNumber(t.rate) }));
 }
 
-/** Name to amount for the bill forms: approved service and part rates, with the price list as the fallback. */
+/** Name to amount for the bill forms: approved service and part rates, with the price list as the fallback. A hidden item has no price at all. */
 export async function billPrices() {
   const prices = parsePriceList((await getSettings()).price_list);
-  const rated = await db.serviceType.findMany({ where: { active: true, rate: { not: null } }, select: { name: true, rate: true } });
-  for (const { name, rate } of rated) prices[name] = toNumber(rate);
+  const rows = await db.serviceType.findMany({ select: { name: true, rate: true, active: true } });
+  for (const { name, rate, active } of rows) {
+    if (!active) delete prices[name];
+    else if (rate !== null) prices[name] = toNumber(rate);
+  }
   return prices;
 }
 
-/** Parts offered on the bill forms, including ones added here that aren't in the built-in list. */
+/** Parts offered on the bill forms. Every built-in part has a row, so hiding or renaming one here is what the form shows. */
 export const activePartNames = async () =>
   (await db.serviceType.findMany({ where: { active: true, kind: "PART" }, orderBy: { name: "asc" }, select: { name: true } })).map((t) => t.name);
+
+/** Services offered on the bill forms: the catalog's, plus ready-made names with no row of their own. */
+export async function activeServiceNames() {
+  const rows = await db.serviceType.findMany({ where: { kind: "SERVICE" }, orderBy: { name: "asc" }, select: { name: true, active: true } });
+  const known = new Set(rows.map((t) => t.name));
+  return [...rows.filter((t) => t.active).map((t) => t.name), ...UNCATALOGUED_WORK_NAMES.filter((n) => !known.has(n))];
+}
+
+/** Everything a bill form needs to offer items and prefill their prices. */
+export async function billCatalog() {
+  const [prices, parts, services] = await Promise.all([billPrices(), activePartNames(), activeServiceNames()]);
+  return { prices, parts, services };
+}

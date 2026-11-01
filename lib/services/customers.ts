@@ -123,11 +123,17 @@ export function contactSearchWhere(q: string | null | undefined): Prisma.Custome
   };
 }
 
-/** The contact search, plus the customer code printed on each card. */
+/** The contact search, plus the customer code and vehicle make and model printed on each card. */
 export function customerSearchWhere(q: string | null | undefined): Prisma.CustomerWhereInput {
   const term = q?.trim();
   if (!term) return {};
-  return { OR: [...(contactSearchWhere(term).OR ?? []), { customerCode: { contains: term, mode: "insensitive" } }] };
+  return {
+    OR: [
+      ...(contactSearchWhere(term).OR ?? []),
+      { customerCode: { contains: term, mode: "insensitive" } },
+      { vehicles: { some: { OR: [{ brand: { contains: term, mode: "insensitive" } }, { model: { contains: term, mode: "insensitive" } }] } } },
+    ],
+  };
 }
 
 /** Everything the view dialog shows, as plain strings, so it's safe to send to the browser. */

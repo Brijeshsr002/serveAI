@@ -33,7 +33,7 @@ describe("service rates", () => {
       expect(Number(t.rate)).toBe(300);
       expect(Number(t.proposedRate)).toBe(500);
       expect((await billPrices())[NAME]).toBe(300);
-      expect((await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: true } })).status).toBe(200);
+      expect((await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: true, proposedRate: 500 } })).status).toBe(200);
       t = await row();
       expect(Number(t.rate)).toBe(500);
       expect(t.proposedRate).toBeNull();
@@ -43,13 +43,13 @@ describe("service rates", () => {
   it("keeps the old rate when the admin rejects, and only admins can decide", async () => {
     await propose(worker, 500);
     for (const cookie of [reception, worker]) {
-      expect((await call(decide, "POST", { cookie, params: { id }, body: { approve: true } })).status).toBe(403);
+      expect((await call(decide, "POST", { cookie, params: { id }, body: { approve: true, proposedRate: 500 } })).status).toBe(403);
     }
-    expect((await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: false } })).status).toBe(200);
+    expect((await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: false, proposedRate: 500 } })).status).toBe(200);
     const t = await row();
     expect(Number(t.rate)).toBe(300);
     expect(t.proposedRate).toBeNull();
-    expect((await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: true } })).status).toBe(409);
+    expect((await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: true, proposedRate: 500 } })).status).toBe(409);
   });
 
   it("gives a new enquiry the default price, unless one is quoted", async () => {

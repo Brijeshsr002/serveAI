@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 export type DataCard = {
   id: string;
+  /** Column keys this card can actually land in. Leave out when every column that takes drops will do. */
+  dropTo?: string[];
   title: React.ReactNode;
   /** Top-right of the card, such as an edit button. */
   actions?: React.ReactNode;
@@ -20,6 +22,10 @@ export type DataCard = {
 /** `drop` is what dropping a card here saves. Columns without one are worked out from the record, so they can't take drops. */
 export type DataColumn = { key: string; label: string; color: string; cards: DataCard[]; drop?: Record<string, unknown> };
 
+/** A drop must be able to put the card in that column, or "Moved to" would be untrue. */
+export const canDrop = (card: Pick<DataCard, "dropTo">, from: string, column: Pick<DataColumn, "key" | "drop">) =>
+  Boolean(column.drop) && from !== column.key && (!card.dropTo || card.dropTo.includes(column.key));
+
 export function DataBoard({ columns, empty = "Nothing here", dropEndpoint }: {
   columns: DataColumn[];
   empty?: string;
@@ -27,14 +33,14 @@ export function DataBoard({ columns, empty = "Nothing here", dropEndpoint }: {
   dropEndpoint?: string;
 }) {
   const router = useRouter();
-  const [dragging, setDragging] = useState<{ id: string; from: string } | null>(null);
+  const [dragging, setDragging] = useState<{ id: string; from: string; dropTo?: string[] } | null>(null);
   const [over, setOver] = useState<string | null>(null);
 
   async function drop(column: DataColumn) {
     const card = dragging;
     setDragging(null);
     setOver(null);
-    if (!card || !dropEndpoint || !column.drop || card.from === column.key) return;
+    if (!card || !dropEndpoint || !canDrop(card, card.from, column)) return;
     try {
       await api(dropEndpoint.replace(":id", card.id), { method: "PATCH", body: column.drop });
       toast.success(`Moved to ${column.label}`);
@@ -47,7 +53,7 @@ export function DataBoard({ columns, empty = "Nothing here", dropEndpoint }: {
   return (
     <div className="flex items-start gap-3 overflow-x-auto pb-4">
       {columns.map((column) => {
-        const droppable = Boolean(dragging && column.drop && dragging.from !== column.key);
+        const droppable = Boolean(dragging && canDrop(dragging, dragging.from, column));
         return (
           <section
             key={column.key}
@@ -72,21 +78,23 @@ export function DataBoard({ columns, empty = "Nothing here", dropEndpoint }: {
             </header>
             <div className="min-h-16 space-y-2">
               {column.cards.length === 0 && <p className="px-1 py-4 text-center text-xs text-muted-foreground">{empty}</p>}
-              {column.cards.map((card) => (
+              {column.cards.map((card) => {
+                const movable = Boolean(dropEndpoint) && card.dropTo?.length !== 0;
+                return (
                 <article
                   key={card.id}
-                  draggable={Boolean(dropEndpoint)}
+                  draggable={movable}
                   onDragStart={(e) => {
                     if (!e.currentTarget.contains(e.target as Node)) return;
                     e.dataTransfer.effectAllowed = "move";
                     e.dataTransfer.setData("text/plain", card.id);
-                    setDragging({ id: card.id, from: column.key });
+                    setDragging({ id: card.id, from: column.key, dropTo: card.dropTo });
                   }}
                   onDragEnd={() => {
                     setDragging(null);
                     setOver(null);
                   }}
-                  className={cn("space-y-1 rounded-lg border bg-card p-2.5 text-sm shadow-xs", dropEndpoint && "cursor-grab active:cursor-grabbing")}
+                  className={cn("space-y-1 rounded-lg border bg-card p-2.5 text-sm shadow-xs", movable && "cursor-grab active:cursor-grabbing")}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 font-medium break-words">{card.title}</div>
@@ -101,7 +109,8 @@ export function DataBoard({ columns, empty = "Nothing here", dropEndpoint }: {
                   )}
                   {card.footer}
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
         );

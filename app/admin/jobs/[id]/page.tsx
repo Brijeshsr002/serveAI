@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { dateTime, money, time } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { getJobForUser, workersWithLoad } from "@/lib/services/jobs";
-import { activePartNames, billPrices } from "@/lib/services/service-rates";
+import { billCatalog } from "@/lib/services/service-rates";
 import { trackingUrl } from "@/lib/settings";
 import { WorkItemDialog } from "@/components/work-item-dialog";
 import { boardTargets, isTerminal, STATUS_LABEL, STATUSES } from "@/lib/status";
@@ -31,8 +31,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   const openPayment = job.payments.find((p) => p.status === "PENDING" || p.status === "PROCESSING");
   const itemsTotal = job.items.filter((i) => i.approval === "APPROVED").reduce((sum, i) => sum + Number(i.total), 0);
   const closed = isTerminal(job.status);
-  const prices = await billPrices();
-  const parts = await activePartNames();
+  const catalog = await billCatalog();
 
   return (
     <>
@@ -78,11 +77,12 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
           <Section
             title="Service items"
-            action={!paid && <WorkItemDialog staff jobId={job.id} prices={prices} parts={parts} variant="outline" trigger="+ Add item" />}
+            action={!paid && <WorkItemDialog staff jobId={job.id} {...catalog} variant="outline" trigger="+ Add item" />}
           >
             <SimpleTable
               headers={["Item", "Type", "Qty", "Price", "Tax", "Discount", "Total", ""]}
               empty="No items yet. Add parts and labour to build the invoice."
+              rowKeys={job.items.map((i) => i.id)}
               rows={job.items.map((i) => [
                 <div key="n">{i.name}<ApprovalBadge approval={i.approval} /></div>,
                 i.itemType.toLowerCase(),

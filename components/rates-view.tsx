@@ -11,6 +11,7 @@ export async function RatesView() {
     <SimpleTable
       headers={[noun, "Rate", "Change requested", ""]}
       empty={`No ${noun.toLowerCase()}s yet`}
+      rowKeys={rows.map((t) => t.id)}
       rows={rows.map((t) => [
         t.name,
         t.rate ? money(t.rate) : "Not set",

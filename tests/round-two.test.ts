@@ -382,7 +382,7 @@ describe("parts", () => {
     const id = (await db.serviceType.findUniqueOrThrow({ where: { name: "Brake Pads" } })).id;
     await call(setRate, "POST", { cookie: worker, params: { id }, body: { rate: 2500 } });
     expect((await billPrices())["Brake Pads"]).toBe(2000);
-    await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: true } });
+    await call(decide, "POST", { cookie: admin, params: { id }, body: { approve: true, proposedRate: 2500 } });
     expect((await billPrices())["Brake Pads"]).toBe(2500);
   });
 
@@ -478,7 +478,7 @@ describe("rate notifications", () => {
   it("tells them when a request is approved", async () => {
     await call(setRate, "POST", { cookie: cookies.rita, params: { id }, body: { rate: 2500 } });
     await db.staffNotification.deleteMany();
-    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: true } });
+    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: true, proposedRate: 2500 } });
     expect(await recipients()).toEqual(["Raj", "Rita", "Sam"]);
     expect((await feed(cookies.raj)).items[0].body).toBe("Brake Pads is now ₹2,500.");
   });
@@ -491,7 +491,7 @@ describe("rate notifications", () => {
   it("tells only the requester when rejected", async () => {
     await call(setRate, "POST", { cookie: cookies.raj, params: { id }, body: { rate: 2500 } });
     await db.staffNotification.deleteMany();
-    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: false } });
+    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: false, proposedRate: 2500 } });
     expect(await recipients()).toEqual(["Raj"]);
     expect((await feed(cookies.raj)).items[0]).toMatchObject({ title: "Rate request rejected", link: "/worker/service-rates" });
     expect((await db.serviceType.findUniqueOrThrow({ where: { id } })).proposedById).toBeNull();
@@ -499,7 +499,7 @@ describe("rate notifications", () => {
 
   it("finds the requester by name for requests made before ids were kept", async () => {
     await db.serviceType.update({ where: { id }, data: { proposedRate: 2500, proposedBy: "Rita", proposedAt: new Date() } });
-    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: false } });
+    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: false, proposedRate: 2500 } });
     expect(await recipients()).toEqual(["Rita"]);
   });
 
@@ -530,7 +530,7 @@ describe("rate notifications", () => {
       expect((await call(setRate, "POST", { cookie: cookies.admin, params: { id }, body: { rate: 2300 } })).status).toBe(200);
       expect(Number((await db.serviceType.findUniqueOrThrow({ where: { id } })).rate)).toBe(2300);
       expect((await call(setRate, "POST", { cookie: cookies.raj, params: { id }, body: { rate: 2400 } })).status).toBe(200);
-      expect((await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: false } })).status).toBe(200);
+      expect((await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: false, proposedRate: 2400 } })).status).toBe(200);
     } finally {
       spy.mockRestore();
     }
@@ -538,7 +538,7 @@ describe("rate notifications", () => {
 
   it("doesn't use WhatsApp for any of it", async () => {
     await call(setRate, "POST", { cookie: cookies.raj, params: { id }, body: { rate: 2500 } });
-    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: true } });
+    await call(decide, "POST", { cookie: cookies.admin, params: { id }, body: { approve: true, proposedRate: 2500 } });
     expect(sendieeCalls()).toEqual([]);
   });
 });

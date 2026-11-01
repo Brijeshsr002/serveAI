@@ -37,6 +37,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
           <SimpleTable
             headers={["Name", "Role", "Status", "Note", "Actions"]}
             empty="No staff on this date"
+            rowKeys={day.entries.map((e) => e.userId)}
             rows={day.entries.map((e) => {
               const body = { userId: e.userId, date };
               return [

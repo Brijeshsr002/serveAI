@@ -7,15 +7,19 @@ import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { money } from "@/lib/format";
 
+/** Who the draft prices are filed under until an admin reviews them. See the review_draft_rates migration. */
+const STARTING_PRICE = "Starting price";
+
 function RateDecision({ type: t }: { type: { id: string; proposedRate: unknown; proposedBy: string | null } }) {
   if (t.proposedRate === null) return null;
   const endpoint = `/api/service-types/${t.id}/rate/decision`;
+  const proposedRate = String(t.proposedRate);
   return (
     <div className="my-1 space-y-1 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
-      <p>{t.proposedBy ?? "Staff"} asked for {money(t.proposedRate as number)}</p>
+      <p>{t.proposedBy === STARTING_PRICE ? `${STARTING_PRICE}: ${money(t.proposedRate as number)}` : `${t.proposedBy ?? "Staff"} asked for ${money(t.proposedRate as number)}`}</p>
       <div className="flex gap-1">
-        <ActionButton label="Approve" endpoint={endpoint} body={{ approve: true }} success="Rate updated" />
-        <ActionButton label="Reject" variant="ghost" endpoint={endpoint} body={{ approve: false }} success="Request rejected" />
+        <ActionButton label="Approve" endpoint={endpoint} body={{ approve: true, proposedRate }} success="Rate updated" />
+        <ActionButton label="Reject" variant="ghost" endpoint={endpoint} body={{ approve: false, proposedRate }} success="Request rejected" />
       </div>
     </div>
   );
@@ -43,6 +47,8 @@ export default async function ServiceTypesPage({ searchParams }: { searchParams:
       ...col,
       cards: rows.filter(match).map((t) => ({
         id: t.id,
+        // The waiting column follows the request alone, so a card can't leave it until the request is decided.
+        dropTo: t.proposedRate !== null ? [] : undefined,
         title: t.name,
         actions: <FormDialog trigger={<Pencil className="size-3.5" />} triggerLabel={`Edit ${t.name}`} triggerSize="icon-sm" variant="ghost" title={`Edit ${t.name}`} method="PATCH" endpoint={`/api/service-types/${t.id}`} fields={fields} initial={{ name: t.name, description: t.description }} success="Saved" />,
         lines: t.description ? [t.description] : [],
@@ -57,6 +63,7 @@ export default async function ServiceTypesPage({ searchParams }: { searchParams:
       <SimpleTable
         headers={["Name", "Rate", "Change requested", "Status", "Actions"]}
         empty="None yet"
+        rowKeys={rows.map((t) => t.id)}
         rows={rows.map((t) => [
           t.name,
           t.rate ? money(t.rate) : "Not set",

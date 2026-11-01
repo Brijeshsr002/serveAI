@@ -16,6 +16,11 @@ export const WORK_NAMES = [
   "Suspension Repair", "Electrical Repair", "Denting", "Painting", "Scratch Removal", "Labour Charge", "Pickup and Drop",
 ];
 
+/** Ready-made services with no row in Service Types from the start. The rest of WORK_NAMES have rows, so Service Types decides how they're offered. */
+export const UNCATALOGUED_WORK_NAMES = [
+  "Engine Bay Cleaning", "Waxing", "Tyre Rotation", "Puncture Repair", "Battery Check", "Denting", "Painting", "Scratch Removal", "Labour Charge", "Pickup and Drop",
+];
+
 /** Starting prices in rupees, only a first draft. Approved rates in Service Types win; this list is the fallback in Settings. */
 export const DEFAULT_PRICE_LIST = `Car Wash = 300
 Foam Wash = 500

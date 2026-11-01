@@ -41,6 +41,7 @@ export function CustomerViewButton({ id, name, base }: { id: string; name: strin
   useEffect(() => {
     if (!open) return;
     let stale = false;
+    setData(null);
     setError("");
     api<CustomerOverview>(`/api/customers/${id}/overview`).then(
       (result) => { if (!stale) setData(result); },

@@ -2,20 +2,22 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { liveRefreshPaused } from "@/lib/live-refresh";
 import { cn } from "@/lib/utils";
 
 const INTERVAL_MS = 20_000;
 
 /**
  * Keeps every screen in step: a change made by the worker, reception, admin or a customer shows up
- * on the others within 20 seconds. Refreshing keeps open forms and typed text, and pauses in hidden tabs.
+ * on the others within 20 seconds. Pauses in hidden tabs, and while someone is in the middle of a dialog or
+ * a confirmation, because new data can move or remove the card that holds it.
  */
 export function LiveRefresh({ className }: { className?: string }) {
   const router = useRouter();
 
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === "visible") router.refresh();
+      if (document.visibilityState === "visible" && !liveRefreshPaused(document)) router.refresh();
     };
     const timer = setInterval(refresh, INTERVAL_MS);
     document.addEventListener("visibilitychange", refresh);

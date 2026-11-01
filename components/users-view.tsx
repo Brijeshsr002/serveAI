@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { userSelect } from "@/lib/services/users";
 import { ACTIVE_STATUSES } from "@/lib/status";
 
+export const workerDropTo = (active: boolean, activeJobs: number) => (active ? ["off"] : [activeJobs > 0 ? "busy" : "free"]);
+
 export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEPTIONIST"; title: string; view?: string }) {
   const board = isBoardView(view);
   const users = await db.user.findMany({
@@ -27,7 +29,7 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
   const groups = role === "WORKER"
     ? [
         { key: "free", label: "Free", color: "bg-green-100 text-green-800", drop: { active: true }, match: (u: (typeof users)[number]) => u.active && u._count.assignedJobs === 0 },
-        { key: "busy", label: "On jobs", color: "bg-blue-100 text-blue-700", match: (u: (typeof users)[number]) => u.active && u._count.assignedJobs > 0 },
+        { key: "busy", label: "On jobs", color: "bg-blue-100 text-blue-700", drop: { active: true }, match: (u: (typeof users)[number]) => u.active && u._count.assignedJobs > 0 },
         { key: "off", label: "Inactive", color: "bg-slate-100 text-slate-700", drop: { active: false }, match: (u: (typeof users)[number]) => !u.active },
       ]
     : [
@@ -38,6 +40,8 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
     ...col,
     cards: users.filter(match).map((u) => ({
       id: u.id,
+      // Free and On jobs follow the worker's jobs, so a drag only changes whether they're active.
+      ...(role === "WORKER" ? { dropTo: workerDropTo(u.active, u._count.assignedJobs) } : {}),
       title: <TextLink href={`/admin/staff/${u.id}`}>{u.name}</TextLink>,
       actions: editForm(u),
       lines: [u.email, u.phone ?? "No phone"],
@@ -59,6 +63,7 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
       {board ? <DataBoard columns={columns} empty="None" dropEndpoint="/api/users/:id" /> : <Section title={`All ${title.toLowerCase()}`}>
         <SimpleTable
           headers={role === "WORKER" ? ["Name", "Email", "Phone", "Active jobs", "Completed", "Status", "Actions"] : ["Name", "Email", "Phone", "Status", "Actions"]}
+          rowKeys={users.map((u) => u.id)}
           rows={users.map((u) => [
             <TextLink key="n" href={`/admin/staff/${u.id}`}>{u.name}</TextLink>,
             u.email,

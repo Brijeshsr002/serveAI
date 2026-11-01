@@ -61,7 +61,13 @@ export function Section({ title, action, children }: { title: string; action?: R
   );
 }
 
-export function SimpleTable({ headers, rows, empty = "Nothing here yet" }: { headers: string[]; rows: React.ReactNode[][]; empty?: string }) {
+export function SimpleTable({ headers, rows, rowKeys, empty = "Nothing here yet" }: {
+  headers: string[];
+  rows: React.ReactNode[][];
+  /** One record id per row. Needed when a row holds a dialog or anything else with state, so that state follows its record when rows shift. */
+  rowKeys?: string[];
+  empty?: string;
+}) {
   if (rows.length === 0) return <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p>;
   return (
     <Table>
@@ -70,7 +76,7 @@ export function SimpleTable({ headers, rows, empty = "Nothing here yet" }: { hea
       </TableHeader>
       <TableBody>
         {rows.map((row, i) => (
-          <TableRow key={i}>{row.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}</TableRow>
+          <TableRow key={rowKeys?.[i] ?? i}>{row.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}</TableRow>
         ))}
       </TableBody>
     </Table>

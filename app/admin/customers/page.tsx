@@ -76,11 +76,12 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         <ViewSwitch board={board} q={q} />
         <FormDialog trigger="+ Add customer" title="Add customer" endpoint="/api/customers" fields={customerFields} success="Customer added" redirectTo={`${base}/customers/:id`} />
       </PageHeader>
-      <SearchForm q={q} view={board ? undefined : "list"} placeholder="Search name, phone or vehicle number" />
+      <SearchForm q={q} view={board ? undefined : "list"} placeholder="Search name, phone or vehicle" />
       {board ? <DataBoard columns={columns} empty="No customers" /> : <Section title="All customers">
         <SimpleTable
           headers={["Customer", "Phone", "Vehicles", "Active Services", "Last Service", "Payment Status", "Actions"]}
           empty="No customers match"
+          rowKeys={customers.map((c) => c.id)}
           rows={customers.map((c) => [
             <div key="n"><TextLink href={`${base}/customers/${c.id}`}>{c.name}</TextLink><div className="text-xs text-muted-foreground">{c.customerCode}</div></div>,
             `+${c.phone}`,

@@ -171,6 +171,8 @@ export function ActionButton({
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);
+      // A refusal usually means the page is out of date, so show what's there now.
+      router.refresh();
     } finally {
       setBusy(false);
     }

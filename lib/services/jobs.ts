@@ -284,9 +284,9 @@ export function hideFromWorker<T extends { trackingToken: string; payments?: { p
   return { ...rest, ...(job.payments ? { payments: job.payments.map((p) => ({ ...p, paymentLink: null })) } : {}) };
 }
 
-/** Workers with their current load and today's leave, for the assign dropdown. */
-export async function workersWithLoad() {
-  const today = dayKeyToDate(istDayKey(new Date()));
+/** Workers with their current load and leave on the given IST day (today by default), for the assign dropdown. */
+export async function workersWithLoad(dayKey = istDayKey(new Date())) {
+  const day = dayKeyToDate(dayKey);
   const workers = await db.user.findMany({
     where: { role: "WORKER", active: true },
     orderBy: { name: "asc" },
@@ -294,7 +294,7 @@ export async function workersWithLoad() {
       id: true,
       name: true,
       _count: { select: { assignedJobs: { where: { status: { in: ACTIVE_STATUSES } } } } },
-      attendance: { where: { date: today, status: "LEAVE" }, select: { id: true } },
+      attendance: { where: { date: day, status: "LEAVE" }, select: { id: true } },
     },
   });
   return workers.map((w) => ({ id: w.id, name: w.name, activeJobs: w._count.assignedJobs, onLeave: w.attendance.length > 0 }));
@@ -304,23 +304,27 @@ const AUTO_ACTOR: Actor = { ...SYSTEM_ACTOR, name: "Auto-assign" };
 
 const autoAssignOn = async () => (await db.setting.findUnique({ where: { key: "auto_assign_enabled" } }))?.value === "true";
 
-/** Who can take work now: fewest active jobs first, then by name so ties always go the same way. */
-const availableWorkers = async () =>
-  (await workersWithLoad())
+/** Who can take work on that day: fewest active jobs first, then by name so ties always go the same way. */
+const availableWorkers = async (dayKey?: string) =>
+  (await workersWithLoad(dayKey))
     .filter((w) => !w.onLeave)
     .sort((a, b) => a.activeJobs - b.activeJobs || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
 /** A failure here must not lose the job that was just created, so it only logs. Returns null when nothing was assigned. */
-async function autoAssignNewJob(job: { id: string; serviceNumber: string }) {
+async function autoAssignNewJob(job: { id: string; serviceNumber: string; appointmentDate: Date | null }) {
   try {
     if (!(await autoAssignOn())) return null;
-    const [next] = await availableWorkers();
+    // A booking needs someone who is in on the day of the booking. Day keys sort as dates.
+    const today = istDayKey(new Date());
+    const booked = job.appointmentDate ? istDayKey(job.appointmentDate) : today;
+    const day = booked > today ? booked : today;
+    const [next] = await availableWorkers(day);
     if (next) return await assignWorker(AUTO_ACTOR, job.id, next.id);
     await logActivity(AUTO_ACTOR, {
       action: "AUTO_ASSIGN_SKIPPED",
       entityType: "ServiceJob",
       entityId: job.id,
-      summary: `No worker is available today, so ${job.serviceNumber} was left unassigned`,
+      summary: `No worker is available ${day === today ? "today" : `on ${day}`}, so ${job.serviceNumber} was left unassigned`,
     });
   } catch (err) {
     console.error("Auto-assign failed:", (err as Error).message);

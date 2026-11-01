@@ -4,7 +4,7 @@ import { WorkerJobCard } from "@/components/worker-job-card";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { addDays, startOfDayIST } from "@/lib/format";
-import { activePartNames, billPrices } from "@/lib/services/service-rates";
+import { billCatalog } from "@/lib/services/service-rates";
 import { ACTIVE_STATUSES } from "@/lib/status";
 
 const include = {
@@ -16,8 +16,7 @@ const include = {
 
 export default async function WorkerDashboard() {
   const user = await requireRole(["WORKER"]);
-  const prices = await billPrices();
-  const parts = await activePartNames();
+  const catalog = await billCatalog();
   const today = startOfDayIST();
   const tomorrow = addDays(today, 1);
   const jobs = await db.serviceJob.findMany({
@@ -42,11 +41,11 @@ export default async function WorkerDashboard() {
       </div>
       <h2 className="mb-2 font-medium">Today</h2>
       {todays.length === 0 && <p className="mb-4 text-sm text-muted-foreground">No jobs for today</p>}
-      <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{todays.map((j) => <WorkerJobCard key={j.id} job={j} prices={prices} parts={parts} />)}</div>
+      <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{todays.map((j) => <WorkerJobCard key={j.id} job={j} catalog={catalog} />)}</div>
       {upcoming.length > 0 && (
         <>
           <h2 className="mb-2 font-medium">Upcoming</h2>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{upcoming.map((j) => <WorkerJobCard key={j.id} job={j} prices={prices} parts={parts} />)}</div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{upcoming.map((j) => <WorkerJobCard key={j.id} job={j} catalog={catalog} />)}</div>
         </>
       )}
     </>

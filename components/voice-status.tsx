@@ -87,7 +87,7 @@ export function VoiceStatus({ jobId, options, compact }: { jobId: string; option
       {!compact && <p className="text-xs text-muted-foreground">Say: {options.map((s) => STATUS_LABEL[s]).join(", ")}</p>}
       <div aria-live="polite">
         {heard && match && (
-          <div className="space-y-2 text-sm">
+          <div data-live-refresh-pause className="space-y-2 text-sm">
             <p>Heard “{heard}”. Move to <strong>{STATUS_LABEL[match]}</strong>? The customer will be told.</p>
             <div className="flex gap-2">
               <Button size="sm" disabled={busy} onClick={() => confirm(match)}>Yes, move</Button>

@@ -9,19 +9,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/client";
-import { ISSUE_NAMES, PART_NAMES, WORK_NAMES } from "@/lib/work-catalog";
+import { ISSUE_NAMES } from "@/lib/work-catalog";
 
 type ItemType = "PART" | "LABOUR" | "SERVICE";
 export type WorkItem = { id: string; itemType: ItemType; name: string; quantity: number; unitPrice: number };
 
-const groups = (parts: string[]): { title: string; type: ItemType; names: string[] }[] => [
+const groups = (services: string[], parts: string[]): { title: string; type: ItemType; names: string[] }[] => [
   { title: "Issues found", type: "LABOUR", names: ISSUE_NAMES },
-  { title: "Services", type: "SERVICE", names: WORK_NAMES },
-  { title: "Parts", type: "PART", names: [...new Set([...PART_NAMES, ...parts])] },
+  { title: "Services", type: "SERVICE", names: services },
+  { title: "Parts", type: "PART", names: parts },
 ];
 
 /** Tap a listed issue, service or part, or type your own, then enter the amount. */
-export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize = "sm", variant = "default", className, prices = {}, parts = [], staff = false }: {
+export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize = "sm", variant = "default", className, prices = {}, parts = [], services = [], staff = false }: {
   jobId: string;
   item?: WorkItem;
   trigger: React.ReactNode;
@@ -31,8 +31,10 @@ export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize
   className?: string;
   /** Name to amount: approved rates, then the price list in Settings. */
   prices?: Record<string, number>;
-  /** Parts added in Service Types, on top of the built-in names. */
+  /** Parts Service Types offers. */
   parts?: string[];
+  /** Services Service Types offers, plus ready-made names it doesn't manage. */
+  services?: string[];
   /** Staff choose whether to ask the customer; a worker's work always asks. */
   staff?: boolean;
 }) {
@@ -52,6 +54,7 @@ export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize
     setItemType(item?.itemType ?? "SERVICE");
     setQuantity(String(item?.quantity ?? 1));
     setUnitPrice(item ? String(item.unitPrice) : "");
+    setNeedsApproval(false);
     setError("");
   }
 
@@ -92,7 +95,7 @@ export function WorkItemDialog({ jobId, item, trigger, triggerLabel, triggerSize
             });
           }}
         >
-          {groups(parts).map((group) => (
+          {groups(services, parts).map((group) => (
             <details key={group.title} open={group.title === "Issues found"} className="rounded-lg border p-2 text-sm">
               <summary className="cursor-pointer font-medium">{group.title}</summary>
               <div className="mt-2 flex flex-wrap gap-1.5">
