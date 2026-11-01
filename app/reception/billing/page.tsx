@@ -1,8 +1,7 @@
 import { BillingView } from "@/components/billing-view";
 import { requireRole } from "@/lib/auth/page";
 
-export default async function ReceptionBillingPage({ searchParams }: { searchParams: Promise<{ view?: string | string[] }> }) {
+export default async function ReceptionBillingPage() {
   await requireRole(["RECEPTIONIST"]);
-  const { view } = await searchParams;
-  return BillingView({ base: "/reception", withInvoices: false, view });
+  return BillingView({ base: "/reception", withInvoices: false });
 }

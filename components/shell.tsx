@@ -2,17 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Role } from "@prisma/client";
 import {
-  Activity, BarChart3, CalendarCheck, CheckCircle2, CreditCard, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
-  Search, Settings, Tags, User, UserCog, Users, X, type LucideIcon,
+  Activity, CheckCircle2, CreditCard, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle,
+  Settings, Tags, User, UserCog, Users, X, type LucideIcon,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { LiveRefresh } from "@/components/live-refresh";
+import { AutoRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/logo";
 import { NotificationBell } from "@/components/notification-bell";
-import { LATEST_VERSION } from "@/lib/changelog";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
@@ -21,25 +19,20 @@ type NavItem = [string, string, LucideIcon];
 const NAV: Record<Role, NavItem[]> = {
   ADMIN: [
     ["Dashboard", "/admin/dashboard", LayoutDashboard],
-    ["Customers", "/admin/customers", Users],
-    ["Kanban Board", "/admin/jobs", ListChecks],
+    ["Customers & Jobs", "/admin/customers-jobs", Users],
     ["Employees", "/admin/employees", UserCog],
-    ["Attendance", "/admin/attendance", CalendarCheck],
     ["Billing", "/admin/billing", CreditCard],
     ["WhatsApp", "/admin/whatsapp", MessageCircle],
-    ["Reports", "/admin/reports", BarChart3],
     ["Service Types", "/admin/service-types", Tags],
-    ["Customer Messages", "/admin/messages", MessageSquareText],
     ["Settings", "/admin/settings", Settings],
     ["Activity Logs", "/admin/activity", Activity],
   ],
   RECEPTIONIST: [
     ["Dashboard", "/reception/dashboard", LayoutDashboard],
-    ["Customers", "/reception/customers", Users],
-    ["Kanban Board", "/reception/jobs", ListChecks],
-    ["Service Rates", "/reception/service-rates", Tags],
+    ["Customers & Jobs", "/reception/customers-jobs", Users],
     ["Billing", "/reception/billing", CreditCard],
     ["WhatsApp", "/reception/whatsapp", MessageCircle],
+    ["Service Rates", "/reception/service-rates", Tags],
     ["Profile", "/reception/profile", User],
   ],
   WORKER: [
@@ -50,67 +43,15 @@ const NAV: Record<Role, NavItem[]> = {
   ],
 };
 
-/** A vehicle's detail page belongs to Customers now that the two share a page. The same goes for staff under Employees and invoices under Billing. */
+/** Pages with no menu item of their own light up the item they sit under. */
 export function navActive(href: string, pathname: string, base: string) {
   return pathname === href
     || (href !== `${base}/dashboard` && pathname.startsWith(`${href}/`))
-    || (href === `${base}/customers` && pathname.startsWith(`${base}/vehicles/`))
+    || (href === `${base}/customers-jobs` && ["customers", "jobs", "vehicles"].some((page) => pathname.startsWith(`${base}/${page}/`)))
     || (href === "/admin/employees" && pathname.startsWith("/admin/staff/"))
-    || (href === "/admin/billing" && pathname.startsWith("/admin/invoices/"));
-}
-
-type SearchResults = {
-  customers: { id: string; name: string; phone: string }[];
-  vehicles: { id: string; registrationNumber: string; brand: string; model: string }[];
-};
-
-const SEARCH_HINT = "Search name, phone or vehicle number";
-
-function GlobalSearch({ base }: { base: string }) {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<SearchResults | null>(null);
-
-  useEffect(() => {
-    if (q.trim().length < 2) return setResults(null);
-    const timer = setTimeout(() => {
-      api<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`).then(setResults).catch(() => setResults(null));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [q]);
-
-  const groups: [string, { key: string; href: string; label: string }[]][] = results
-    ? [
-        ["Customers", results.customers.map((c) => ({ key: c.id, href: `${base}/customers/${c.id}`, label: `${c.name} · +${c.phone}` }))],
-        ["Vehicles", results.vehicles.map((v) => ({ key: v.id, href: `${base}/vehicles/${v.id}`, label: `${v.registrationNumber} · ${v.brand} ${v.model}` }))],
-      ]
-    : [];
-  const empty = results && groups.every(([, items]) => items.length === 0);
-
-  return (
-    <div className="relative w-full max-w-md">
-      <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        aria-label={SEARCH_HINT}
-        placeholder={SEARCH_HINT}
-        className="pl-8"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
-      {results && (
-        <div className="absolute z-30 mt-1 max-h-96 w-full overflow-auto rounded-lg border bg-popover p-2 text-sm shadow-lg">
-          {empty && <p className="p-2 text-muted-foreground">No matches</p>}
-          {groups.filter(([, items]) => items.length).map(([title, items]) => (
-            <div key={title} className="mb-1">
-              <p className="px-2 py-1 text-xs font-medium text-muted-foreground">{title}</p>
-              {items.map((item) => (
-                <a key={item.key} href={item.href} className="block rounded px-2 py-1.5 hover:bg-accent">{item.label}</a>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    || (href === "/admin/billing" && pathname.startsWith("/admin/invoices/"))
+    || (href === "/admin/whatsapp" && pathname === "/admin/messages")
+    || (href === "/admin/settings" && pathname === "/admin/updates");
 }
 
 export function Shell({ role, name, garage, children }: { role: Role; name: string; garage: string; children: React.ReactNode }) {
@@ -147,36 +88,37 @@ export function Shell({ role, name, garage, children }: { role: Role; name: stri
         );
       })}
       <div className="mt-auto border-t border-sidebar-border pt-3 text-sidebar-foreground">
-        <p className="truncate px-2.5 text-sm font-medium">{name}</p>
-        <p className="mb-2 px-2.5 text-xs text-sidebar-foreground/70 capitalize">{role.toLowerCase()}</p>
+        <div className="mb-2 flex items-center gap-2 px-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{name}</p>
+            <p className="text-xs text-sidebar-foreground/70 capitalize">{role.toLowerCase()}</p>
+          </div>
+          <NotificationBell onNavigate={() => setOpen(false)} />
+        </div>
         <button onClick={logout} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-sidebar-accent">
           <LogOut className="size-4" /> Log out
         </button>
-        {role === "ADMIN" && (
-          <Link href="/admin/updates" onClick={() => setOpen(false)} className="mt-1 block rounded px-2.5 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:underline">v{LATEST_VERSION}</Link>
-        )}
       </div>
     </nav>
   );
 
+  // One sidebar for desktop and the phone drawer, so there is only ever one bell. No transform on it: the bell's list is
+  // fixed to the screen to get out of this scrolling box, and a transform would trap it again.
   return (
     <div className="flex min-h-screen bg-muted/30">
-      <aside className="sticky top-0 hidden h-screen w-56 shrink-0 overflow-y-auto border-r bg-sidebar lg:block">{sidebar}</aside>
-      {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-64 overflow-y-auto bg-sidebar">
-            <button aria-label="Close menu" className="absolute top-3 right-3 p-1" onClick={() => setOpen(false)}><X className="size-5" /></button>
-            {sidebar}
-          </aside>
-        </div>
-      )}
+      <AutoRefresh />
+      {open && <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />}
+      <aside className={cn(
+        "overflow-y-auto bg-sidebar lg:sticky lg:top-0 lg:z-30 lg:block lg:h-screen lg:w-56 lg:shrink-0 lg:border-r",
+        open ? "fixed inset-y-0 left-0 z-50 w-64" : "hidden",
+      )}>
+        {open && <button aria-label="Close menu" className="absolute top-3 right-3 p-1 text-sidebar-foreground lg:hidden" onClick={() => setOpen(false)}><X className="size-5" /></button>}
+        {sidebar}
+      </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2.5">
-          <button aria-label="Open menu" className="p-1 lg:hidden" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
-          {role === "WORKER" ? <Logo name={garage} className="text-xs lg:hidden" logoClassName="h-6" /> : <GlobalSearch base={base} />}
-          <LiveRefresh className="ml-auto" />
-          <NotificationBell />
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2 lg:hidden">
+          <button aria-label="Open menu" className="p-1" onClick={() => setOpen(true)}><Menu className="size-5" /></button>
+          <Logo name={garage} className="text-xs" logoClassName="h-6" />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
       </div>

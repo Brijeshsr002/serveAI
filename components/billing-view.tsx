@@ -1,14 +1,12 @@
 import type { PaymentStatus } from "@prisma/client";
 import { Download } from "lucide-react";
 import { ActionButton } from "@/components/actions";
-import { DataBoard, isBoardView, PageTabs, pickTab, ViewSwitch } from "@/components/data-board";
+import { PageTabs, pickTab } from "@/components/data-board";
 import { PageHeader, PaymentBadge, Section, SimpleTable, TextLink } from "@/components/ui-kit";
 import { db } from "@/lib/db";
 import { date, dateTime, money } from "@/lib/format";
 import { invoiceInclude, invoicePaymentStatus } from "@/lib/services/invoices";
-import { PAYMENT_COLOR } from "@/lib/status";
 
-const PAYMENT_COLUMNS: PaymentStatus[] = ["PENDING", "PROCESSING", "PAID", "FAILED", "REFUNDED", "CANCELLED"];
 const REMINDABLE: PaymentStatus[] = ["PENDING", "PROCESSING"];
 const PAYMENTS_NOTE = "Status changes only come from verified payment-provider webhooks";
 
@@ -20,14 +18,14 @@ function DownloadLink({ id, number }: { id: string; number: string }) {
   );
 }
 
-async function paymentsPanel(base: string, board: boolean) {
+async function paymentsPanel(base: string) {
   const payments = await db.payment.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
     include: { customer: { select: { name: true } }, serviceJob: { select: { id: true, serviceNumber: true } } },
   });
   type Row = (typeof payments)[number];
-  const reminder = (p: Row, className?: string) =>
+  const reminder = (p: Row) =>
     REMINDABLE.includes(p.status) && p.paymentLink ? (
       <ActionButton
         label="Send reminder"
@@ -35,26 +33,9 @@ async function paymentsPanel(base: string, board: boolean) {
         endpoint={`/api/payments/${p.id}/remind`}
         confirm={`Send ${p.customer.name} a WhatsApp reminder for ${money(p.amount)} on ${p.serviceJob.serviceNumber}? It uses the same payment link.`}
         success="Reminder sent on WhatsApp"
-        className={className}
       />
     ) : null;
 
-  if (board) {
-    const columns = PAYMENT_COLUMNS.map((s) => ({
-      key: s,
-      label: s.charAt(0) + s.slice(1).toLowerCase(),
-      color: PAYMENT_COLOR[s],
-      cards: payments.filter((p) => p.status === s).map((p) => ({
-        id: p.id,
-        title: <TextLink href={`${base}/jobs/${p.serviceJob.id}`}>{p.serviceJob.serviceNumber}</TextLink>,
-        lines: [p.customer.name, p.paidAt ? `Paid ${dateTime(p.paidAt)}` : `Created ${dateTime(p.createdAt)}`],
-        left: p.paymentProvider,
-        right: <strong>{money(p.amount)}</strong>,
-        footer: reminder(p, "mt-1 w-full"),
-      })),
-    }));
-    return <DataBoard columns={columns} empty="No payments" />;
-  }
   return (
     <Section title="All payments">
       <SimpleTable
@@ -76,40 +57,19 @@ async function paymentsPanel(base: string, board: boolean) {
   );
 }
 
-async function invoicesPanel(board: boolean) {
+async function invoicesPanel() {
   const invoices = await db.invoice.findMany({ orderBy: { invoiceDate: "desc" }, take: 200, include: invoiceInclude });
   type Row = (typeof invoices)[number];
-  const send = (i: Row, className?: string) => (
+  const send = (i: Row) => (
     <ActionButton
       label="Send on WhatsApp"
       variant="outline"
       endpoint={`/api/invoices/${i.id}/send`}
       confirm={`Send invoice ${i.invoiceNumber} to ${i.serviceJob.customer.name} on WhatsApp?`}
       success="Invoice sent on WhatsApp"
-      className={className}
     />
   );
 
-  if (board) {
-    const columns = [
-      { key: "unpaid", label: "Unpaid", color: "bg-slate-100 text-slate-700", statuses: ["UNPAID", "FAILED", "CANCELLED"] },
-      { key: "pending", label: "Payment pending", color: "bg-amber-100 text-amber-800", statuses: ["PENDING", "PROCESSING"] },
-      { key: "paid", label: "Paid", color: "bg-green-100 text-green-800", statuses: ["PAID"] },
-      { key: "refunded", label: "Refunded", color: "bg-violet-100 text-violet-700", statuses: ["REFUNDED"] },
-    ].map(({ statuses, ...col }) => ({
-      ...col,
-      cards: invoices.filter((i) => statuses.includes(invoicePaymentStatus(i))).map((i) => ({
-        id: i.id,
-        title: <TextLink href={`/admin/invoices/${i.id}`}>{i.invoiceNumber}</TextLink>,
-        lines: [i.serviceJob.customer.name, <TextLink key="s" href={`/admin/jobs/${i.serviceJobId}`}>{i.serviceJob.serviceNumber}</TextLink>],
-        left: date(i.invoiceDate),
-        right: <strong>{money(i.total)}</strong>,
-        actions: <DownloadLink id={i.id} number={i.invoiceNumber} />,
-        footer: send(i, "mt-1 w-full"),
-      })),
-    }));
-    return <DataBoard columns={columns} empty="No invoices" />;
-  }
   return (
     <Section title="All invoices">
       <SimpleTable
@@ -130,18 +90,15 @@ async function invoicesPanel(board: boolean) {
   );
 }
 
-/** Payments and invoices on one page. Invoices are admin-only, so reception never gets the tab or its query, whatever the URL says. */
-export async function BillingView({ base, withInvoices, tab: asked, view }: { base: string; withInvoices: boolean; tab?: unknown; view?: unknown }) {
-  const board = isBoardView(view);
+/** Payments and invoices on one page, as tables. Invoices are admin-only, so reception never gets the tab or its query, whatever the URL says. */
+export async function BillingView({ base, withInvoices, tab: asked }: { base: string; withInvoices: boolean; tab?: unknown }) {
   const tab = withInvoices ? pickTab(asked, ["payments", "invoices"] as const) : "payments";
-  const panel = tab === "payments" ? await paymentsPanel(base, board) : await invoicesPanel(board);
+  const panel = tab === "payments" ? await paymentsPanel(base) : await invoicesPanel();
   return (
     <>
-      <PageHeader title="Billing" subtitle={tab === "payments" ? PAYMENTS_NOTE : undefined}>
-        <ViewSwitch board={board} keep={withInvoices ? { tab } : undefined} />
-      </PageHeader>
+      <PageHeader title="Billing" subtitle={tab === "payments" ? PAYMENTS_NOTE : undefined} />
       {withInvoices && (
-        <PageTabs label="Billing" param="tab" active={tab} keep={board ? {} : { view: "list" }} tabs={[{ key: "payments", label: "Payments" }, { key: "invoices", label: "Invoices" }]} />
+        <PageTabs label="Billing" param="tab" active={tab} tabs={[{ key: "payments", label: "Payments" }, { key: "invoices", label: "Invoices" }]} />
       )}
       {panel}
     </>

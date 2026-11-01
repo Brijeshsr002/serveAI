@@ -38,7 +38,7 @@ const { default: OldPayments } = await import("@/app/admin/payments/page");
 const { default: OldInvoices } = await import("@/app/admin/invoices/page");
 const { default: OldReceptionPayments } = await import("@/app/reception/payments/page");
 const { default: ServiceTypesPage } = await import("@/app/admin/service-types/page");
-const { default: JobsPage } = await import("@/app/admin/jobs/page");
+const { default: CustomersJobsPage } = await import("@/app/admin/customers-jobs/page");
 const { RatesView } = await import("@/components/rates-view");
 const { pickTab } = await import("@/components/data-board");
 const { default: JobPage } = await import("@/app/admin/jobs/[id]/page");
@@ -486,7 +486,7 @@ describe("the Billing page", () => {
     session.user = admin;
   });
 
-  it("opens on Payments, and shows invoices on their tab, in both views", async () => {
+  it("opens on Payments, and shows invoices on their tab, as tables whatever ?view says", async () => {
     const { invoice, payment } = await openPayment(cookie);
     for (const view of [undefined, "list"]) {
       const payments = await AdminBilling(params({ view }));
@@ -503,8 +503,15 @@ describe("the Billing page", () => {
       expect(buttons(invoices, "Send on WhatsApp")[0].props.confirm).toBeTruthy();
       expect(await html(invoices)).toContain(invoice.invoiceNumber);
     }
-    expect(elements(await AdminBilling(params())).some((e) => e.type === DataBoard)).toBe(true);
-    expect(elements(await AdminBilling(params({ view: "list" }))).some((e) => e.type === DataBoard)).toBe(false);
+    for (const view of [undefined, "list", "board", ["list", "x"]]) {
+      for (const tab of ["payments", "invoices"]) {
+        const page = await AdminBilling(params({ view, tab }));
+        expect(elements(page).some((e) => e.type === DataBoard)).toBe(false);
+        const text = await html(page);
+        expect(text).not.toContain("Kanban");
+        expect(text).toContain("<table");
+      }
+    }
   });
 
   it("offers a reminder only on an open payment with a link", async () => {
@@ -521,11 +528,13 @@ describe("the Billing page", () => {
     }
   });
 
-  it("keeps the view when switching tab and the tab when switching view", async () => {
-    const list = await html(await AdminBilling(params({ tab: "invoices", view: "list" })));
-    expect(list).toContain('href="?view=list&amp;tab=payments"');
-    expect(list).toContain('href="?tab=invoices"');
-    expect(list).toContain('href="?tab=invoices&amp;view=list"');
+  it("shows payment status as a coloured tag, and keeps the invoice's download", async () => {
+    const { invoice } = await openPayment(cookie);
+    expect(await html(await AdminBilling(params()))).toMatch(/<span class="[^"]*bg-[^"]*">Pending<\/span>/);
+    const invoices = await html(await AdminBilling(params({ tab: "invoices" })));
+    expect(invoices).toMatch(/<span class="[^"]*bg-[^"]*">Pending<\/span>/);
+    expect(invoices).toContain(`href="/api/invoices/${invoice.id}/pdf"`);
+    expect(invoices).toContain('href="?tab=payments"');
   });
 
   it("falls back safely on junk in the query", async () => {
@@ -533,7 +542,6 @@ describe("the Billing page", () => {
       const text = await html(await AdminBilling(params({ tab })));
       expect(text).toContain("Status changes only come from verified");
     }
-    expect(elements(await AdminBilling(params({ view: ["list", "x"] }))).some((e) => e.type === DataBoard)).toBe(true);
     expect(pickTab(undefined, ["a", "b"] as const)).toBe("a");
     expect(pickTab("b", ["a", "b"] as const)).toBe("b");
     expect(pickTab("constructor", ["a", "b"] as const)).toBe("a");
@@ -543,15 +551,13 @@ describe("the Billing page", () => {
   it("shows reception payments only, whatever the URL asks for", async () => {
     const { invoice, payment } = await openPayment(cookie);
     session.user = await makeUser("RECEPTIONIST", "Rita");
-    for (const search of [{}, { tab: "invoices" }, { tab: "invoices", view: "list" }]) {
-      const page = await ReceptionBilling(params(search));
-      assertClientPropsSendable(page);
-      const text = await html(page);
-      expect(text).not.toContain(invoice.invoiceNumber);
-      expect(text).not.toContain(">Invoices<");
-      expect(buttons(page, "Send on WhatsApp")).toEqual([]);
-      expect(buttons(page, "Send reminder").map((b) => b.props.endpoint)).toEqual([`/api/payments/${payment.id}/remind`]);
-    }
+    const page = await ReceptionBilling();
+    assertClientPropsSendable(page);
+    const text = await html(page);
+    expect(text).not.toContain(invoice.invoiceNumber);
+    expect(text).not.toContain(">Invoices<");
+    expect(buttons(page, "Send on WhatsApp")).toEqual([]);
+    expect(buttons(page, "Send reminder").map((b) => b.props.endpoint)).toEqual([`/api/payments/${payment.id}/remind`]);
   });
 
   it("guards each page for its own role", async () => {
@@ -560,33 +566,29 @@ describe("the Billing page", () => {
     for (const user of [worker, reception, null]) {
       session.user = user;
       await expect(AdminBilling(params())).rejects.toThrow("REFUSED");
-      await expect(OldPayments(params())).rejects.toThrow("REFUSED");
-      await expect(OldInvoices(params())).rejects.toThrow("REFUSED");
+      await expect(OldPayments()).rejects.toThrow("REFUSED");
+      await expect(OldInvoices()).rejects.toThrow("REFUSED");
     }
     session.user = worker;
-    await expect(ReceptionBilling(params())).rejects.toThrow("REFUSED");
-    await expect(OldReceptionPayments(params())).rejects.toThrow("REFUSED");
+    await expect(ReceptionBilling()).rejects.toThrow("REFUSED");
+    await expect(OldReceptionPayments()).rejects.toThrow("REFUSED");
   });
 
   describe("old links", () => {
     const pageFor = (url: string) => `app${url.split("?")[0]}/page.tsx`;
 
-    it("redirect to pages that exist, keeping the view", async () => {
-      const go = async (page: (p: ReturnType<typeof params>) => Promise<unknown>, search: object) => {
-        const err = await page(params(search)).then(() => null, (e: Error) => e);
+    it("redirect to pages that exist, dropping the old view", async () => {
+      const go = async (page: () => Promise<unknown>) => {
+        const err = await page().then(() => null, (e: Error) => e);
         expect(err?.message).toMatch(/^REDIRECT:/);
         const to = err!.message.slice("REDIRECT:".length);
         expect(existsSync(pageFor(to)), to).toBe(true);
         return to;
       };
-      expect(await go(OldPayments, {})).toBe("/admin/billing?tab=payments");
-      expect(await go(OldPayments, { view: "list" })).toBe("/admin/billing?tab=payments&view=list");
-      expect(await go(OldInvoices, {})).toBe("/admin/billing?tab=invoices");
-      expect(await go(OldInvoices, { view: "list" })).toBe("/admin/billing?tab=invoices&view=list");
-      expect(await go(OldInvoices, { view: "evil" })).toBe("/admin/billing?tab=invoices");
+      expect(await go(OldPayments)).toBe("/admin/billing?tab=payments");
+      expect(await go(OldInvoices)).toBe("/admin/billing?tab=invoices");
       session.user = await makeUser("RECEPTIONIST", "Rita");
-      expect(await go(OldReceptionPayments, {})).toBe("/reception/billing");
-      expect(await go(OldReceptionPayments, { view: "list" })).toBe("/reception/billing?view=list");
+      expect(await go(OldReceptionPayments)).toBe("/reception/billing");
       expect(existsSync("app/admin/invoices/[id]/page.tsx")).toBe(true);
     });
   });
@@ -606,9 +608,9 @@ describe("the Billing page", () => {
 
     expect(navActive("/admin/billing", "/admin/billing", "/admin")).toBe(true);
     expect(navActive("/admin/billing", "/admin/invoices/abc", "/admin")).toBe(true);
-    expect(navActive("/admin/billing", "/admin/customers", "/admin")).toBe(false);
+    expect(navActive("/admin/billing", "/admin/customers-jobs", "/admin")).toBe(false);
     expect(navActive("/reception/billing", "/reception/billing", "/reception")).toBe(true);
-    expect(navActive("/admin/customers", "/admin/vehicles/1", "/admin")).toBe(true);
+    expect(navActive("/admin/customers-jobs", "/admin/vehicles/1", "/admin")).toBe(true);
     expect(navActive("/admin/employees", "/admin/staff/1", "/admin")).toBe(true);
   });
 
@@ -625,7 +627,7 @@ describe("Services and Parts tabs", () => {
     await db.serviceType.createMany({ data: [{ name: "Car Wash", rate: 300 }, { name: "Brake Pads", kind: "PART", rate: 2000 }] });
   });
 
-  it("show one kind at a time, in both views, keeping the view", async () => {
+  it("show one kind at a time, as a table whatever ?view says", async () => {
     for (const view of [undefined, "list"]) {
       const services = await html(await ServiceTypesPage(params({ view })));
       expect(services).toContain("Car Wash");
@@ -634,10 +636,12 @@ describe("Services and Parts tabs", () => {
       expect(parts).toContain("Brake Pads");
       expect(parts).not.toContain("Car Wash");
     }
-    const list = await html(await ServiceTypesPage(params({ view: "list", kind: "part" })));
-    expect(list).toContain('href="?view=list&amp;kind=service"');
+    const parts = await ServiceTypesPage(params({ view: "list", kind: "part" }));
+    expect(elements(parts).some((e) => e.type === DataBoard)).toBe(false);
+    const list = await html(parts);
+    expect(list).not.toContain("Kanban");
+    expect(list).toContain('href="?kind=service"');
     expect(list).toContain('href="?kind=part"');
-    expect(list).toContain('href="?kind=part&amp;view=list"');
   });
 
   it("flag a request waiting on the other tab", async () => {
@@ -761,7 +765,7 @@ describe("the Kanban edit form's estimate", () => {
       ],
     });
     await makeJob("Wash");
-    const page = await JobsPage(params());
+    const page = await CustomersJobsPage(params() as { searchParams: Promise<Record<string, string>> });
     assertClientPropsSendable(page);
     const board = elements(page).find((e) => e.type === JobBoard)!;
     expect(board.props.rates).toEqual({ Wash: 300, Polish: 750.5 });

@@ -28,12 +28,13 @@ vi.mock("@/components/live-scene", () => ({ LiveScene: ({ children }: { children
 vi.mock("@/components/charts", () => ({ SingleBarChart: () => null, WorkerChart: () => null }));
 
 const { default: Dashboard } = await import("@/app/admin/dashboard/page");
-const { default: AttendancePage } = await import("@/app/admin/attendance/page");
+const { default: OldAttendancePage } = await import("@/app/admin/attendance/page");
 const { default: StaffPage } = await import("@/app/admin/staff/[id]/page");
 const { default: WorkerProfile } = await import("@/app/worker/profile/page");
 const { default: ReceptionProfile } = await import("@/app/reception/profile/page");
 const { default: WorkerDashboard } = await import("@/app/worker/dashboard/page");
 const { default: EmployeesPage } = await import("@/app/admin/employees/page");
+const AttendancePage = ({ searchParams }: { searchParams: Promise<object> }) => EmployeesPage({ searchParams: searchParams.then((s) => ({ ...s, tab: "attendance" })) });
 const { default: WorkersPage } = await import("@/app/admin/workers/page");
 const { default: ReceptionistsPage } = await import("@/app/admin/receptionists/page");
 const { default: ActivityPage } = await import("@/app/admin/activity/page");
@@ -179,7 +180,8 @@ describe("attendance and staff pages", () => {
       ["receptionists", () => ReceptionistsPage({ searchParams: empty })],
       ["activity", () => ActivityPage()],
       ["reports", () => ReportsPage()],
-      ["invoices", () => InvoicesPage({ searchParams: empty })],
+      ["old attendance", () => OldAttendancePage({ searchParams: empty })],
+      ["invoices", () => InvoicesPage()],
       ["invoice", () => InvoicePage({ params: Promise.resolve({ id: "x" }) })],
       ["messages", () => MessagesPage()],
       ["service types", () => ServiceTypesPage({ searchParams: empty })],

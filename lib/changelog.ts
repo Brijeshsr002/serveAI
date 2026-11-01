@@ -1,4 +1,4 @@
-/** Shipped work in plain English, oldest first. Add a new version at the end: the sidebar label comes from it. */
+/** Shipped work in plain English, oldest first. Add a new version at the end: the label at the foot of Settings comes from it. */
 export const CHANGELOG: { version: string; date: string; changes: string[] }[] = [
   {
     version: "1.0",
@@ -113,6 +113,20 @@ export const CHANGELOG: { version: string; date: string; changes: string[] }[] =
       "Changing the service type when editing a job from Kanban fills in that service's approved rate as the estimate, which you can still change.",
       "The dashboard banner plays real garage footage in its natural colours, with a plain dark shade behind the text. The tracking page's shade is plain too.",
       "Add customer is now only on the Customers page, not the top bar.",
+    ],
+  },
+  {
+    version: "1.9",
+    date: "2026-11-01",
+    changes: [
+      "A shorter menu. Admin: Dashboard, Customers & Jobs, Employees, Billing, WhatsApp, Service Types, Settings, Activity Logs. Reception: Dashboard, Customers & Jobs, Billing, WhatsApp, Service Rates, Profile. Old links still work.",
+      "Customers & Jobs joins the Kanban board and Customers on one page, with a Jobs board tab and a Customers tab, and the name, phone or vehicle number search at the top.",
+      "Attendance is now a tab inside Employees, with its date picker and month summary.",
+      "Reports moved onto the admin dashboard: the extra figures and the CSV downloads, next to the charts already there.",
+      "Billing and Service Types are now tables, with coloured status tags and every button still on the row. Hide and Show replace dragging on Service Types.",
+      "Customer Messages opens from a button at the top of the admin WhatsApp page.",
+      "The version number moved from the sidebar to the foot of Settings.",
+      "The top bar is gone on desktop. The notification bell sits next to your name in the sidebar. Pages still refresh by themselves. On phones a slim bar keeps the menu button and logo, with the bell in the menu.",
     ],
   },
 ];

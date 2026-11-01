@@ -12,7 +12,7 @@ const INTERVAL_MS = 20_000;
  * on the others within 20 seconds. Pauses in hidden tabs, and while someone is in the middle of a dialog or
  * a confirmation, because new data can move or remove the card that holds it.
  */
-export function LiveRefresh({ className }: { className?: string }) {
+function useLiveRefresh() {
   const router = useRouter();
 
   useEffect(() => {
@@ -26,7 +26,17 @@ export function LiveRefresh({ className }: { className?: string }) {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [router]);
+}
 
+/** The refresh alone, for the staff pages. */
+export function AutoRefresh() {
+  useLiveRefresh();
+  return null;
+}
+
+/** The refresh with its Live label, for the customer tracking page. */
+export function LiveRefresh({ className }: { className?: string }) {
+  useLiveRefresh();
   return (
     <span className={cn("flex shrink-0 items-center gap-1.5 text-xs font-medium text-green-700", className)} title="This page updates by itself">
       <span className="relative flex size-2">

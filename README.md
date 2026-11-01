@@ -13,14 +13,14 @@ Customer ⇄ WhatsApp ⇄ Sendiee ⇄ ServAI ⇄ Reception / Admin → Worker
 | Area | What it does |
 |---|---|
 | Roles | Admin, Receptionist and Worker, enforced on every API call |
-| CRM | Customers (unique by phone), vehicles, service jobs, global search |
+| CRM | Customers (unique by phone), vehicles and service jobs. One Customers & Jobs page with a Jobs board tab and a Customers tab, and a search by name, phone or vehicle number at the top |
 | Workflow | Enforced status transitions, full history, logged admin overrides |
 | Worker view | Mobile-first; shows only the worker's own jobs |
-| WhatsApp | Inbox, automatic status updates, customer commands, AI intake webhook |
-| Billing | Service items, invoices with PDF, payment links, signed payment webhooks. One Billing page with Payments and Invoices tabs (Payments only for reception), sending invoices and payment reminders on WhatsApp |
+| WhatsApp | Inbox, automatic status updates, customer commands, AI intake webhook. Admins edit the wording under Customer Messages, a button on the WhatsApp page |
+| Billing | Service items, invoices with PDF, payment links, signed payment webhooks. One Billing page with Payments and Invoices tables on tabs (Payments only for reception), sending invoices and payment reminders on WhatsApp |
 | Tracking | Public page per job, secured by a random token |
-| Employees | One admin page for workers and receptionists: role, salary, attendance, performance and a monthly CSV report |
-| Admin | Dashboard, charts, reports, CSV export, audit log, settings |
+| Employees | One admin page for workers and receptionists, with People and Attendance tabs: role, salary, attendance, performance and a monthly CSV report |
+| Admin | Dashboard with charts, report figures and CSV export, service types and rates, audit log, settings |
 
 ## Tech stack
 

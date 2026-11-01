@@ -44,11 +44,12 @@ vi.mock("@/lib/auth/page", () => ({
 }));
 vi.mock("@/components/live-scene", () => ({ LiveScene: ({ children }: { children: unknown }) => children }));
 
-const { default: CustomersPage } = await import("@/app/admin/customers/page");
+const { default: CustomersJobsPage } = await import("@/app/admin/customers-jobs/page");
+const CustomersPage = ({ searchParams }: { searchParams: Promise<object> }) => CustomersJobsPage({ searchParams: searchParams.then((s) => ({ ...s, tab: "customers" })) });
+const JobsPage = ({ searchParams }: { searchParams: Promise<object> }) => CustomersJobsPage({ searchParams: searchParams.then((s) => ({ ...s, tab: "jobs" })) });
 const { default: VehiclesPage } = await import("@/app/admin/vehicles/page");
-const { default: JobsPage } = await import("@/app/admin/jobs/page");
 const { default: ServiceTypesPage } = await import("@/app/admin/service-types/page");
-const { default: ReportsPage } = await import("@/app/admin/reports/page");
+const { default: DashboardPage } = await import("@/app/admin/dashboard/page");
 const { default: UpdatesPage } = await import("@/app/admin/updates/page");
 const { default: SettingsPage } = await import("@/app/admin/settings/page");
 const { RatesView } = await import("@/components/rates-view");
@@ -184,9 +185,9 @@ describe("customers page", () => {
   });
 
   it("redirects the vehicles list to the customers page for each role", async () => {
-    await expect(VehiclesPage({ searchParams: noParams })).rejects.toThrow("REDIRECT:/admin/customers");
+    await expect(VehiclesPage({ searchParams: noParams })).rejects.toThrow("REDIRECT:/admin/customers-jobs?tab=customers");
     asUser(await makeUser("RECEPTIONIST", "Rita"));
-    await expect(VehiclesPage({ searchParams: Promise.resolve({ q: "TN 38" }) })).rejects.toThrow("REDIRECT:/reception/customers?q=TN%2038");
+    await expect(VehiclesPage({ searchParams: Promise.resolve({ q: "TN 38" }) })).rejects.toThrow("REDIRECT:/reception/customers-jobs?tab=customers&q=TN+38");
     asUser(await makeUser("WORKER", "Raj"));
     await expect(VehiclesPage({ searchParams: noParams })).rejects.toThrow("REDIRECT");
   });
@@ -303,13 +304,11 @@ describe("chart drilldown", () => {
     expect(all.rows[0]).toMatchObject({ workerName: "Raj", phone: expect.any(String), registrationNumber: expect.any(String) });
   });
 
-  it("renders bars as buttons on the reports page, with plain props", async () => {
+  it("renders bars as buttons in the reports on the dashboard", async () => {
     const worker = await makeUser("WORKER", "Raj");
     await openJob(worker.id, "Car Wash");
     asUser(await db.user.findFirstOrThrow({ where: { role: "ADMIN" } }));
-    const page = await ReportsPage();
-    assertClientPropsSendable(page);
-    const text = await html(page);
+    const text = await html(await DashboardPage());
     expect(text).toContain("Car Wash: 1. Show the jobs");
     expect(text).toContain("Raj, Active: 1. Show the jobs");
   });
@@ -411,7 +410,7 @@ describe("parts", () => {
     expect(partRates).toContain("Brake Pads");
     expect(partRates).not.toContain("Car Wash");
     for (const view of [undefined, "list"]) {
-      const page = await ServiceTypesPage({ searchParams: Promise.resolve({ view }) });
+      const page = await ServiceTypesPage({ searchParams: Promise.resolve({ view } as object) });
       assertClientPropsSendable(page);
       const text = await html(page);
       expect(text).toContain("Car Wash");
@@ -778,7 +777,7 @@ describe("invoice", () => {
 });
 
 describe("updates page", () => {
-  it("lists versions newest first, and only admins get the page and the label", async () => {
+  it("lists versions newest first, only admins get the page, and the label sits in Settings", async () => {
     const admin = await makeUser("ADMIN", "Admin");
     asUser(admin);
     expect(LATEST_VERSION).toBe(CHANGELOG[CHANGELOG.length - 1].version);
@@ -787,7 +786,11 @@ describe("updates page", () => {
     expect(text).not.toContain("ServeAI");
 
     const shell = (role: Role) => html(createElement(Shell, { role, name: "X", garage: "Car's Spa", children: null }));
-    expect(await shell("ADMIN")).toContain(`v${LATEST_VERSION}`);
+    expect(await shell("ADMIN")).not.toContain(`v${LATEST_VERSION}`);
+    expect(await shell("ADMIN")).not.toContain("/admin/updates");
+    const settings = await html(await SettingsPage());
+    expect(settings).toContain(`v${LATEST_VERSION}`);
+    expect(settings).toContain('href="/admin/updates"');
     for (const role of ["RECEPTIONIST", "WORKER"] as Role[]) {
       expect(await shell(role)).not.toContain("/admin/updates");
       asUser(await makeUser(role, role === "WORKER" ? "Raj" : "Rita"));
@@ -795,11 +798,12 @@ describe("updates page", () => {
     }
   });
 
-  it("puts a bell in every role's top bar, and the top search says what it covers", async () => {
+  it("puts a bell in every role's sidebar, and the search says what it covers", async () => {
     for (const role of ["ADMIN", "RECEPTIONIST", "WORKER"] as Role[]) {
       expect(await html(createElement(Shell, { role, name: "X", garage: "Car's Spa", children: null }))).toContain('aria-label="Notifications"');
     }
-    expect(await html(createElement(Shell, { role: "ADMIN", name: "X", garage: "Car's Spa", children: null }))).toContain('placeholder="Search name, phone or vehicle number"');
+    asUser(await makeUser("ADMIN", "Admin"));
+    expect(await html(await CustomersPage({ searchParams: Promise.resolve({}) }))).toContain('placeholder="Search name, phone or vehicle number"');
   });
 });
 

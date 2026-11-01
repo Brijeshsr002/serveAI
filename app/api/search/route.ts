@@ -4,7 +4,7 @@ import { STAFF } from "@/lib/permissions";
 import { normalizeRegistration } from "@/lib/phone";
 import { contactSearchWhere } from "@/lib/services/customers";
 
-/** The top search: name, phone and vehicle number only. */
+/** The search on Customers & Jobs: name, phone and vehicle number only. */
 export const GET = authed(STAFF, async ({ req }) => {
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return { customers: [], vehicles: [] };

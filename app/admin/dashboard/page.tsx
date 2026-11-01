@@ -3,13 +3,14 @@ import { LiveScene } from "@/components/live-scene";
 import { TeamAttendanceCard } from "@/components/team-attendance";
 import { CLIPS } from "@/lib/media-clips";
 import { SingleBarChart, WorkerChart } from "@/components/charts";
-import { Section,SimpleTable, StatCard, StatusBadge, TextLink } from "@/components/ui-kit";
+import { Section,SimpleTable, StatCard, TextLink } from "@/components/ui-kit";
+import { buttonVariants } from "@/components/ui/button";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { dateTime, money } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { chartData, dashboardStats } from "@/lib/services/reports";
+import { chartData, dashboardStats, reportSummary } from "@/lib/services/reports";
 
 export default async function DashboardPage() {
   const user = await requireRole(STAFF);
@@ -63,11 +64,32 @@ export default async function DashboardPage() {
 }
 
 async function AdminPanels() {
-  const [charts, activity] = await Promise.all([
+  const [summary, charts, activity] = await Promise.all([
+    reportSummary(),
     chartData(),
     db.activityLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
   ]);
+  const exportLink = (type: string, label: string) => (
+    <a key={type} className={buttonVariants({ variant: "outline", size: "sm" })} href={`/api/reports/export?type=${type}`}>{label}</a>
+  );
   return (
+    <>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Reports</h2>
+        <div className="flex flex-wrap gap-2">
+          {exportLink("services", "Export services CSV")}
+          {exportLink("payments", "Export payments CSV")}
+          {exportLink("workers", "Export workers CSV")}
+        </div>
+      </div>
+      {/* Services today, revenue and pending payments are already in the figures at the top of the page. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <StatCard label="Services (7 days)" value={summary.weekly} />
+        <StatCard label="Services (30 days)" value={summary.monthly} />
+        <StatCard label="Completed services" value={summary.completed} />
+        <StatCard label="Cancelled services" value={summary.cancelled} />
+        <StatCard label="Repeat customers" value={summary.repeatCustomers} />
+      </div>
     <div className="grid gap-4 lg:grid-cols-2">
       <Section title="Services by status"><SingleBarChart data={charts.byStatus} label="Services" horizontal drill="status" /></Section>
       <Section title="Service type distribution"><SingleBarChart data={charts.byType} label="Services" horizontal drill="type" /></Section>
@@ -85,5 +107,6 @@ async function AdminPanels() {
         </ul>
       </Section>
     </div>
+    </>
   );
 }

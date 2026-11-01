@@ -192,10 +192,10 @@ Admin accounts aren't employees: no endpoint here can create one or give anyone 
 | POST | `/api/service-types` | All | `name`*, `description`, `kind` (`SERVICE` or `PART`), `rate`. Blank `rate` means no rate. Only admins add services; an admin's rate applies at once, and anyone else's waits for approval | 403, 400 `VALIDATION_ERROR`, 409 `DUPLICATE_SERVICE_TYPE` |
 | PATCH | `/api/service-types/:id` | Admin | `name`, `description`, `active` | |
 | GET, PATCH | `/api/settings` | Admin | Key-value pairs of known setting keys | |
-| GET | `/api/search` | Staff | `?q=` matches name, phone or vehicle number; returns `customers`, `vehicles` | |
+| GET | `/api/search` | Staff | `?q=` matches name, phone or vehicle number; returns `customers`, `vehicles`. Behind the search on Customers & Jobs | |
 | GET | `/api/customers/:id/overview` | Staff | The whole record for the view dialog, as plain values | 404 `CUSTOMER_NOT_FOUND` |
-| GET | `/api/reports/drilldown` | Admin | `?kind=status`, `type`, `day`, `month` or `worker`, `value`*, and `bucket=completed` or `active` for a worker. Returns the records behind a chart bar | 400, 404 `WORKER_NOT_FOUND` |
+| GET | `/api/reports/drilldown` | Admin | `?kind=status`, `type`, `day`, `month` or `worker`, `value`*, and `bucket=completed` or `active` for a worker. Returns the records behind a chart bar on the admin dashboard | 400, 404 `WORKER_NOT_FOUND` |
 | GET | `/api/notifications` | All | Your own latest 20, and the unread count | |
 | POST | `/api/notifications/read` | All | `ids`, or nothing for all. Only ever touches your own | |
-| GET | `/api/reports/export` | Admin | `?type=services`, `payments` or `workers` returns CSV | 400 `UNKNOWN_REPORT` |
+| GET | `/api/reports/export` | Admin | `?type=services`, `payments` or `workers` returns CSV. The admin dashboard links to these | 400 `UNKNOWN_REPORT` |
 | GET | `/api/activity-logs` | Admin | Latest 200 | |

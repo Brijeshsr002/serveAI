@@ -87,10 +87,11 @@ export function TextLink({ href, children }: { href: string; children: React.Rea
   return <Link href={href} className="font-medium text-primary hover:underline">{children}</Link>;
 }
 
-/** A plain GET form, so list search needs no client code. */
-export function SearchForm({ q, placeholder, view }: { q?: string; placeholder: string; view?: string }) {
+/** A plain GET form, so list search needs no client code. `keep` holds other query values it must not lose, such as the open tab. */
+export function SearchForm({ q, placeholder, view, keep }: { q?: string; placeholder: string; view?: string; keep?: Record<string, string> }) {
   return (
     <form method="get" className="mb-4 max-w-sm">
+      {Object.entries(keep ?? {}).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
       {view && <input type="hidden" name="view" value={view} />}
       <Input name="q" defaultValue={q} placeholder={placeholder} aria-label={placeholder} />
     </form>

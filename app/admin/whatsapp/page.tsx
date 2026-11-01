@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ActionButton } from "@/components/actions";
 import { Composer, InboxAutoRefresh, ScrollToEnd } from "@/components/inbox";
+import { buttonVariants } from "@/components/ui/button";
 import { Field, PageHeader, StatusBadge, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
@@ -37,8 +38,10 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <InboxAutoRefresh />
-      <PageHeader title="WhatsApp" subtitle={isSendieeConfigured() ? "Connected to Sendiee" : "Sendiee is not configured: messages will fail until SENDIEE_API_KEY and SENDIEE_BRAND_NUMBER are set"} />
-      <div className="grid h-[calc(100vh-11rem)] min-h-[28rem] grid-cols-1 overflow-hidden rounded-xl border bg-card md:grid-cols-[17rem_1fr] xl:grid-cols-[17rem_1fr_16rem]">
+      <PageHeader title="WhatsApp" subtitle={isSendieeConfigured() ? "Connected to Sendiee" : "Sendiee is not configured: messages will fail until SENDIEE_API_KEY and SENDIEE_BRAND_NUMBER are set"}>
+        {user.role === "ADMIN" && <Link href="/admin/messages" className={buttonVariants({ variant: "outline", size: "sm" })}>Customer Messages</Link>}
+      </PageHeader>
+      <div className="grid h-[calc(100vh-11rem)] min-h-[28rem] lg:h-[calc(100vh-8rem)] grid-cols-1 overflow-hidden rounded-xl border bg-card md:grid-cols-[17rem_1fr] xl:grid-cols-[17rem_1fr_16rem]">
         <ul className={cn("overflow-y-auto border-r", selected && "hidden md:block")}>
           {conversations.length === 0 && <li className="p-4 text-sm text-muted-foreground">No conversations yet</li>}
           {conversations.map((conv) => (

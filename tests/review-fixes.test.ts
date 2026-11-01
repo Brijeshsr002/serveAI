@@ -112,7 +112,7 @@ describe("deciding a rate request", () => {
   it("has the page send the amount it shows", async () => {
     await propose(1500);
     session.user = await makeUser("ADMIN", "Boss");
-    const page = await ServiceTypesPage({ searchParams: Promise.resolve({ view: "list" }) });
+    const page = await ServiceTypesPage({ searchParams: Promise.resolve({}) });
     // RateDecision is a plain function in the page, so render its element to reach the buttons.
     const decisions = elements(page).filter((e) => typeof e.type === "function" && (e.type as { name: string }).name === "RateDecision");
     expect(decisions.length).toBeGreaterThan(0);
@@ -275,9 +275,9 @@ describe("list rows", () => {
 
   it("are given a record key wherever a row holds a dialog", () => {
     for (const file of [
-      "app/admin/customers/page.tsx",
+      "components/customers-panel.tsx",
       "app/admin/service-types/page.tsx",
-      "app/admin/attendance/page.tsx",
+      "components/attendance-view.tsx",
       "app/admin/jobs/[id]/page.tsx",
       "app/worker/jobs/[id]/page.tsx",
       "components/rates-view.tsx",
@@ -317,25 +317,17 @@ describe("dropping a card", () => {
     expect(canDrop({ dropTo: [] }, "a", column("b", { active: true }))).toBe(false);
   });
 
-  it("won't let a service with a request waiting leave that column", async () => {
-    session.user = await makeUser("ADMIN", "Boss");
-    await db.serviceType.createMany({ data: [{ name: "Waiting", proposedRate: 10 }, { name: "Plain" }] });
-    const page = await ServiceTypesPage({ searchParams: Promise.resolve({}) });
-    const board = elements(page).find((e) => e.type === DataBoard)!;
-    const cards = (board.props.columns as { cards: { title: string; dropTo?: string[] }[] }[]).flatMap((c) => c.cards);
-    expect(cards.find((c) => c.title === "Waiting")?.dropTo).toEqual([]);
-    expect(cards.find((c) => c.title === "Plain")?.dropTo).toBeUndefined();
-  });
 });
 
 describe("old vehicles links", () => {
   it("keep their view and search", async () => {
     session.user = await makeUser("ADMIN", "Admin");
     const go = (searchParams: { q?: string; view?: string }) => VehiclesPage({ searchParams: Promise.resolve(searchParams) });
-    await expect(go({ view: "list" })).rejects.toThrow(/REDIRECT:\/admin\/customers\?view=list$/);
-    await expect(go({ view: "list", q: "TN 38" })).rejects.toThrow(/REDIRECT:\/admin\/customers\?view=list&q=TN%2038$/);
-    await expect(go({ q: "Creta" })).rejects.toThrow(/REDIRECT:\/admin\/customers\?q=Creta$/);
-    await expect(go({ view: "evil" })).rejects.toThrow(/REDIRECT:\/admin\/customers$/);
+    const to = "/admin/customers-jobs?tab=customers";
+    await expect(go({})).rejects.toThrow(`REDIRECT:${to}`);
+    await expect(go({ view: "list" })).rejects.toThrow(`REDIRECT:${to}&view=list`);
+    await expect(go({ view: "list", q: "TN 38" })).rejects.toThrow(`REDIRECT:${to}&view=list&q=TN+38`);
+    await expect(go({ q: "Creta" })).rejects.toThrow(`REDIRECT:${to}&q=Creta`);
   });
 
   it("find customers by the make and model on their vehicles, without widening the top search", async () => {

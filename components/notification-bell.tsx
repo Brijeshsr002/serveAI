@@ -2,7 +2,7 @@
 
 import { Bell } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { dateTime } from "@/lib/format";
@@ -15,11 +15,32 @@ type Feed = {
 
 const INTERVAL_MS = 30_000;
 
+const LIST_WIDTH = 320;
+const LIST_HEIGHT = 384;
+const EDGE = 8;
+
+/**
+ * The bell sits at the foot of a scrolling sidebar, which would clip anything positioned inside it. So the list is
+ * fixed to the screen: beside the bell when there's room, as on desktop, otherwise above it, as in the phone drawer.
+ */
+function listPlace(bell: DOMRect): CSSProperties {
+  const width = Math.min(LIST_WIDTH, window.innerWidth - EDGE * 2);
+  const beside = bell.right + EDGE + width + EDGE <= window.innerWidth;
+  const bottomEdge = beside ? bell.bottom : bell.top - EDGE;
+  return {
+    width,
+    left: beside ? bell.right + EDGE : Math.min(Math.max(EDGE, bell.right - width), window.innerWidth - width - EDGE),
+    bottom: window.innerHeight - bottomEdge,
+    maxHeight: Math.min(LIST_HEIGHT, bottomEdge - EDGE),
+  };
+}
+
 /** Unread items stay highlighted while the list is open; the server already counts them as read. */
-export function NotificationBell() {
+export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
   const [feed, setFeed] = useState<Feed | null>(null);
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [place, setPlace] = useState<CSSProperties>();
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const openRef = useRef(false);
@@ -50,9 +71,15 @@ export function NotificationBell() {
       setOpen(false);
       button.current?.focus();
     };
+    const sync = () => setPlace(listPlace(button.current!.getBoundingClientRect()));
+    sync();
+    window.addEventListener("resize", sync);
+    window.addEventListener("scroll", sync, true);
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape);
     return () => {
+      window.removeEventListener("resize", sync);
+      window.removeEventListener("scroll", sync, true);
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
@@ -84,7 +111,7 @@ export function NotificationBell() {
         aria-haspopup="true"
         title="Notifications"
         onClick={toggle}
-        className="relative"
+        className="relative text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground"
       >
         <Bell className="size-4" />
         {unread > 0 && (
@@ -93,8 +120,8 @@ export function NotificationBell() {
           </span>
         )}
       </Button>
-      {open && (
-        <div className="absolute right-0 z-30 mt-1 max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border bg-popover p-2 text-sm text-popover-foreground shadow-lg">
+      {open && place && (
+        <div style={place} className="fixed z-50 overflow-auto rounded-lg border bg-popover p-2 text-sm text-popover-foreground shadow-lg">
           <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Notifications</p>
           {failed && <p role="alert" className="px-2 py-1 text-xs text-destructive">Couldn&apos;t refresh notifications.</p>}
           {feed && feed.items.length === 0 && <p className="p-2 text-muted-foreground">Nothing yet</p>}
@@ -110,7 +137,7 @@ export function NotificationBell() {
               const style = cn("block rounded px-2 py-1.5", !item.readAt && "bg-accent");
               return (
                 <li key={item.id}>
-                  {item.link ? <Link href={item.link} onClick={() => setOpen(false)} className={cn(style, "hover:bg-accent")}>{content}</Link> : <div className={style}>{content}</div>}
+                  {item.link ? <Link href={item.link} onClick={() => { setOpen(false); onNavigate?.(); }} className={cn(style, "hover:bg-accent")}>{content}</Link> : <div className={style}>{content}</div>}
                 </li>
               );
             })}

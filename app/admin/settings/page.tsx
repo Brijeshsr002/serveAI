@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { SettingsForm } from "@/components/settings-form";
 import { PageHeader, TextLink } from "@/components/ui-kit";
 import { requireRole } from "@/lib/auth/page";
+import { LATEST_VERSION } from "@/lib/changelog";
 import { getSettings } from "@/lib/settings";
 
 export default async function SettingsPage() {
@@ -61,6 +63,7 @@ export default async function SettingsPage() {
           },
         ]}
       />
+      <p className="mt-6 text-center text-xs text-muted-foreground"><Link href="/admin/updates" className="hover:text-foreground hover:underline">v{LATEST_VERSION}</Link></p>
     </>
   );
 }

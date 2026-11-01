@@ -71,7 +71,7 @@ export async function TeamAttendanceCard() {
             </li>
           ))}
         </ul>
-        <Link href="/admin/attendance" className="mt-3 block text-sm font-medium text-primary hover:underline">View full attendance</Link>
+        <Link href="/admin/employees?tab=attendance" className="mt-3 block text-sm font-medium text-primary hover:underline">View full attendance</Link>
       </CardContent>
     </Card>
   );

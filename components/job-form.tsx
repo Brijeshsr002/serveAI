@@ -81,7 +81,7 @@ export function NewJobDialog({
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="customerId">Customer *</Label>
-              <Link href={`${base}/customers`} className="text-xs font-medium text-primary hover:underline">+ New customer</Link>
+              <Link href={`${base}/customers-jobs?tab=customers`} className="text-xs font-medium text-primary hover:underline">+ New customer</Link>
             </div>
             <Input aria-label="Filter customers" placeholder="Filter by name or phone" value={filter} onChange={(e) => setFilter(e.target.value)} />
             <select id="customerId" required className={SELECT_CLASS} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
