@@ -79,7 +79,7 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
               ))}
               <ScrollToEnd dep={selected.messages.length} />
             </div>
-            <Composer customerId={selected.id} windowOpen={windowOpen} />
+            <Composer key={selected.id} customerId={selected.id} windowOpen={windowOpen} />
           </div>
         ) : (
           <p className="p-6 text-sm text-muted-foreground">Select a conversation</p>

@@ -1,3 +1,4 @@
+import { getSettings } from "@/lib/settings";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -233,7 +234,7 @@ export const sendSchema = z
     serviceJobId: z.string().optional().nullable(),
     text: z.string().trim().min(1).max(4096).optional(),
     templateName: z.string().trim().min(1).optional(),
-    bodyParameters: z.array(z.string()).optional(),
+    bodyParameters: z.array(z.string().trim().min(1, "Fill in every template detail").max(1024)).optional(),
   })
   .refine((v) => v.text || v.templateName, "Provide text or templateName");
 
@@ -255,6 +256,7 @@ export async function sendStaffMessage(actor: Actor, input: z.output<typeof send
           { ...spec, text: input.text ?? `[template: ${input.templateName}]` },
           input.templateName,
           input.bodyParameters ?? [],
+          (await getSettings()).template_language,
         )
       : await sendFreeformText({ ...spec, text: input.text! });
     await logActivity(actor, {
