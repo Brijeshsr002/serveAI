@@ -1,8 +1,10 @@
 import { PageHeader, Section, SimpleTable } from "@/components/ui-kit";
+import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { dateTime } from "@/lib/format";
 
 export default async function ActivityPage() {
+  await requireRole(["ADMIN"]);
   const logs = await db.activityLog.findMany({ orderBy: { createdAt: "desc" }, take: 300 });
   return (
     <>

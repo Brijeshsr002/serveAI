@@ -74,6 +74,11 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum AttendanceStatus {
+  PRESENT
+  LEAVE
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -82,9 +87,19 @@ model User {
   passwordHash String   @map("password_hash")
   role         Role
   active       Boolean  @default(true)
+  /// Monthly, in rupees. Admin-only: never add this or staffNotes to userSelect or the session.
+  salary           Decimal?  @db.Decimal(12, 2)
+  jobTitle         String?   @map("job_title")
+  joinedOn         DateTime? @map("joined_on") @db.Date
+  address          String?
+  emergencyContact String?   @map("emergency_contact")
+  staffNotes       String?   @map("staff_notes")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  attendance       Attendance[] @relation("AttendanceUser")
+  inactivePeriods  StaffInactivePeriod[]
+  attendanceMarked Attendance[] @relation("AttendanceMarkedBy")
   assignedJobs   ServiceJob[]    @relation("AssignedWorker")
   createdJobs    ServiceJob[]    @relation("CreatedBy")
   statusChanges  ServiceStatusHistory[]
@@ -92,6 +107,45 @@ model User {
 
   @@index([role, active])
   @@map("users")
+}
+
+/// No row means absent for an active worker or receptionist; absence is derived, never stored.
+model Attendance {
+  id         String           @id @default(cuid())
+  userId     String           @map("user_id")
+  /// The IST calendar day.
+  date       DateTime         @db.Date
+  status     AttendanceStatus
+  clockInAt  DateTime?        @map("clock_in_at")
+  clockOutAt DateTime?        @map("clock_out_at")
+  note       String?
+  markedById String?          @map("marked_by_id")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  user     User  @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  markedBy User? @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("attendance")
+}
+
+/// When someone was deactivated: their days in here aren't derived as absent. User.active only holds the current state.
+/// A partial unique index in the migration allows one open period per person.
+model StaffInactivePeriod {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  /// First inactive IST day.
+  fromDate  DateTime  @map("from_date") @db.Date
+  /// The IST day they came back, which is not itself inactive. Null while still inactive.
+  untilDate DateTime? @map("until_date") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("staff_inactive_periods")
 }
 
 model Customer {

@@ -2,8 +2,9 @@ import { Pencil } from "lucide-react";
 import { ActionButton, FormDialog } from "@/components/actions";
 import { DataBoard, isBoardView, ViewSwitch } from "@/components/data-board";
 import { userFields } from "@/components/forms-config";
-import { PageHeader, Section, SimpleTable } from "@/components/ui-kit";
+import { PageHeader, Section, SimpleTable, TextLink } from "@/components/ui-kit";
 import { db } from "@/lib/db";
+import { userSelect } from "@/lib/services/users";
 import { ACTIVE_STATUSES } from "@/lib/status";
 
 export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEPTIONIST"; title: string; view?: string }) {
@@ -11,7 +12,8 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
   const users = await db.user.findMany({
     where: { role },
     orderBy: [{ active: "desc" }, { name: "asc" }],
-    include: {
+    select: {
+      ...userSelect,
       _count: {
         select: {
           assignedJobs: { where: { status: { in: ACTIVE_STATUSES } } },
@@ -36,7 +38,7 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
     ...col,
     cards: users.filter(match).map((u) => ({
       id: u.id,
-      title: u.name,
+      title: <TextLink href={`/admin/staff/${u.id}`}>{u.name}</TextLink>,
       actions: editForm(u),
       lines: [u.email, u.phone ?? "No phone"],
       ...(role === "WORKER" ? { left: `${u._count.assignedJobs} active`, right: `${completed.find((c) => c.assignedWorkerId === u.id)?._count ?? 0} completed` } : {}),
@@ -58,7 +60,7 @@ export async function UsersView({ role, title, view }: { role: "WORKER" | "RECEP
         <SimpleTable
           headers={role === "WORKER" ? ["Name", "Email", "Phone", "Active jobs", "Completed", "Status", "Actions"] : ["Name", "Email", "Phone", "Status", "Actions"]}
           rows={users.map((u) => [
-            u.name,
+            <TextLink key="n" href={`/admin/staff/${u.id}`}>{u.name}</TextLink>,
             u.email,
             u.phone ?? "—",
             ...(role === "WORKER" ? [u._count.assignedJobs, completed.find((c) => c.assignedWorkerId === u.id)?._count ?? 0] : []),

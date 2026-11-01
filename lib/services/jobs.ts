@@ -115,7 +115,7 @@ export async function updateJob(actor: Actor, id: string, input: z.output<typeof
 }
 
 export async function assignWorker(actor: Actor, jobId: string, workerId: string) {
-  const worker = await db.user.findUnique({ where: { id: workerId } });
+  const worker = await db.user.findUnique({ where: { id: workerId }, select: { id: true, name: true, role: true, active: true } });
   if (!worker || worker.role !== "WORKER" || !worker.active) {
     throw badRequest("INVALID_WORKER", "Select an active worker");
   }

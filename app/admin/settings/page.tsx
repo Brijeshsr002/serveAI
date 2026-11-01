@@ -1,8 +1,10 @@
 import { SettingsForm } from "@/components/settings-form";
 import { PageHeader, TextLink } from "@/components/ui-kit";
+import { requireRole } from "@/lib/auth/page";
 import { getSettings } from "@/lib/settings";
 
 export default async function SettingsPage() {
+  await requireRole(["ADMIN"]);
   const values = await getSettings();
   return (
     <>

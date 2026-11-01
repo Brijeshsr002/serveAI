@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { Actor } from "@/lib/api/route";
 import { db, type DbClient } from "@/lib/db";
 
-export const SYSTEM_ACTOR: Actor = { id: null, role: "SYSTEM", name: "ServeAI" };
+export const SYSTEM_ACTOR: Actor = { id: null, role: "SYSTEM", name: "ServAI" };
 
 export async function logActivity(
   actor: Actor,

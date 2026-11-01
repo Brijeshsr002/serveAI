@@ -1,10 +1,12 @@
 import { DataBoard, isBoardView, ViewSwitch } from "@/components/data-board";
 import { PageHeader, PaymentBadge, Section, SimpleTable, TextLink } from "@/components/ui-kit";
+import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { date, money } from "@/lib/format";
 import { invoiceInclude, invoicePaymentStatus } from "@/lib/services/invoices";
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  await requireRole(["ADMIN"]);
   const board = isBoardView((await searchParams).view);
   const invoices = await db.invoice.findMany({ orderBy: { invoiceDate: "desc" }, take: 200, include: invoiceInclude });
   const columns = [

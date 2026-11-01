@@ -63,6 +63,22 @@ export const jobEditFields: FormField[] = [
   { name: "expectedCompletion", label: "Expected completion", type: "datetime-local" },
 ];
 
+export const staffProfileFields: FormField[] = [
+  { name: "name", label: "Name", required: true },
+  { name: "phone", label: "Phone", type: "tel" },
+  { name: "email", label: "Email", type: "email", required: true },
+  { name: "jobTitle", label: "Job title", placeholder: "Senior mechanic" },
+  { name: "salary", label: "Monthly salary (₹)", type: "number" },
+  { name: "joinedOn", label: "Joined on", type: "date" },
+  { name: "address", label: "Address", type: "textarea" },
+  { name: "emergencyContact", label: "Emergency contact" },
+  { name: "staffNotes", label: "Notes (admin only, never shown to staff)", type: "textarea" },
+  { name: "active", label: "Active", type: "checkbox" },
+  { name: "password", label: "New password (leave blank to keep)", type: "password", omitEmpty: true },
+];
+
+export const attendanceNoteField: FormField[] = [{ name: "note", label: "Note (optional)", type: "textarea" }];
+
 export const userFields = (role: "WORKER" | "RECEPTIONIST"): FormField[] => [
   { name: "name", label: "Name", required: true },
   { name: "email", label: "Email", type: "email", required: true },

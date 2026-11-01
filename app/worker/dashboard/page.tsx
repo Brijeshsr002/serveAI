@@ -1,3 +1,4 @@
+import { ClockCard } from "@/components/clock-card";
 import { PageHeader, StatCard } from "@/components/ui-kit";
 import { WorkerJobCard } from "@/components/worker-job-card";
 import { requireRole } from "@/lib/auth/page";
@@ -31,6 +32,7 @@ export default async function WorkerDashboard() {
   return (
     <>
       <PageHeader title="My Jobs" subtitle={`Hi ${user.name}`} />
+      <ClockCard userId={user.id} />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Today's Jobs" value={todays.length} />
         <StatCard label="In Progress" value={jobs.filter((j) => j.status === "SERVICE_IN_PROGRESS").length} />

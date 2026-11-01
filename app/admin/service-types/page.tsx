@@ -2,6 +2,7 @@ import { Pencil } from "lucide-react";
 import { ActionButton, FormDialog } from "@/components/actions";
 import { DataBoard, isBoardView, ViewSwitch } from "@/components/data-board";
 import { PageHeader, Section, SimpleTable } from "@/components/ui-kit";
+import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { money } from "@/lib/format";
 
@@ -20,6 +21,7 @@ function RateDecision({ type: t }: { type: { id: string; proposedRate: unknown; 
 }
 
 export default async function ServiceTypesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  await requireRole(["ADMIN"]);
   const board = isBoardView((await searchParams).view);
   const types = await db.serviceType.findMany({ orderBy: { name: "asc" } });
   const fields = [

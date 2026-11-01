@@ -2,11 +2,13 @@ import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/actions";
 import { Field, PageHeader, PaymentBadge, Section, SimpleTable } from "@/components/ui-kit";
 import { buttonVariants } from "@/components/ui/button";
+import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { date, money } from "@/lib/format";
 import { invoiceInclude, invoicePaymentStatus } from "@/lib/services/invoices";
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  await requireRole(["ADMIN"]);
   const { id } = await params;
   const invoice = await db.invoice.findUnique({ where: { id }, include: invoiceInclude });
   if (!invoice) notFound();

@@ -1,4 +1,6 @@
+import { ClockCard } from "@/components/clock-card";
 import { LiveScene } from "@/components/live-scene";
+import { TeamAttendanceCard } from "@/components/team-attendance";
 import { CLIPS } from "@/lib/media-clips";
 import { SingleBarChart, WorkerChart } from "@/components/charts";
 import { Section,SimpleTable, StatCard, StatusBadge, TextLink } from "@/components/ui-kit";
@@ -6,6 +8,7 @@ import { requireRole } from "@/lib/auth/page";
 import { db } from "@/lib/db";
 import { dateTime, money } from "@/lib/format";
 import { roleBase, STAFF } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { chartData, dashboardStats } from "@/lib/services/reports";
 
 export default async function DashboardPage() {
@@ -28,16 +31,17 @@ export default async function DashboardPage() {
         <p className="text-sm text-slate-300">Welcome back, {user.name}. {stats.vehiclesInService} vehicle{stats.vehiclesInService === 1 ? "" : "s"} in the garage right now.</p>
         </div>
       </LiveScene>
+      {user.role === "RECEPTIONIST" && <ClockCard userId={user.id} />}
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard tone="border-t-sky-500" label="Total Customers" value={stats.customers} />
-        <StatCard tone="border-t-orange-500" label="Today's Services" value={stats.todayServices} />
+        <StatCard tone="border-t-primary" label="Today's Services" value={stats.todayServices} />
         <StatCard tone="border-t-blue-600" label="Active Services" value={stats.activeServices} />
         <StatCard tone="border-t-green-600" label="Completed Today" value={stats.completedToday} />
         <StatCard tone="border-t-violet-500" label="Vehicles in Service" value={stats.vehiclesInService} />
         <StatCard tone="border-t-amber-500" label="Pending Payments" value={stats.pendingPayments} hint={money(stats.pendingAmount)} />
         {isAdmin && <StatCard tone="border-t-teal-600" label="Revenue" value={money(stats.revenue)} />}
       </div>
-      <div className="mb-6">
+      <div className={cn("mb-6 grid grid-cols-1 items-start gap-4", isAdmin && "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]")}>
         <Section title="New requests awaiting assignment">
           <SimpleTable
             headers={["Service", "Customer", "Vehicle", "Type", "Received"]}
@@ -51,6 +55,7 @@ export default async function DashboardPage() {
             ])}
           />
         </Section>
+        {isAdmin && <TeamAttendanceCard />}
       </div>
       {isAdmin && <AdminPanels />}
     </>

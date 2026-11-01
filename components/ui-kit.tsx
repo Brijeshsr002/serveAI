@@ -42,7 +42,7 @@ export function StatCard({ label, value, hint, tone }: { label: string; value: R
     <Card size="sm" className={cn(tone && "border-t-4", tone)}>
       <CardContent>
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        <p className="mt-1 text-2xl font-semibold break-words tabular-nums">{value}</p>
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>

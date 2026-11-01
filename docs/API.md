@@ -157,10 +157,24 @@ The token authorizes access, so no login is needed. Unknown tokens return 404 `T
 | POST | `/api/track/:token/pay` | Token | `{ paymentLink }`, created from the invoice total |
 | GET | `/api/track/:token/invoice` | Token | PDF, or 404 `INVOICE_NOT_FOUND` |
 
-## Administration
+## Attendance
+
+Days are IST calendar days and clock times come from the server. No record means absent for an active worker or receptionist, from the later of their joining day and the day attendance started, and not for days they were inactive. A real record always counts, including for inactive staff.
 
 | Method | URL | Access | Body or query | Errors |
 |---|---|---|---|---|
+| POST | `/api/attendance/clock` | All | `action`*: `in` or `out`, for the logged-in user | 409 `ALREADY_CLOCKED_IN`, `ON_LEAVE`, `NOT_CLOCKED_IN`, `ALREADY_CLOCKED_OUT` |
+| GET | `/api/attendance` | Admin | `?date=yyyy-mm-dd`, default today | 400 `INVALID_DATE` |
+| POST | `/api/attendance/mark` | Admin | `userId`*, `date`*, `action`*: `leave`, `present` or `clear`, `note` | 400 `BEFORE_JOINING`, `FUTURE_DATE`, `TOO_FAR_AHEAD`; 404 `STAFF_NOT_FOUND`; 409 `ALREADY_CLOCKED_IN` |
+
+## Administration
+
+Salary and staff notes are only read and written through `/api/users/:id/profile`. Other user endpoints never return them.
+
+| Method | URL | Access | Body or query | Errors |
+|---|---|---|---|---|
+| GET | `/api/users/:id/profile` | Admin | Worker or receptionist, with salary and notes | 404 `STAFF_NOT_FOUND` |
+| PATCH | `/api/users/:id/profile` | Admin | Any of `name`, `email`, `phone`, `jobTitle`, `salary`, `joinedOn`, `address`, `emergencyContact`, `staffNotes`, `active`, `password` | 404 `STAFF_NOT_FOUND`, 409 `DUPLICATE_EMAIL`, `WORKER_HAS_ACTIVE_JOBS` |
 | GET | `/api/users` | Admin | `?role=` | |
 | POST | `/api/users` | Admin | `name`*, `email`*, `role`*, `password`*, `phone` | 409 `DUPLICATE_EMAIL` |
 | PATCH | `/api/users/:id` | Admin | Any of those, plus `active` | 400 `CANNOT_CHANGE_SELF`, 409 `WORKER_HAS_ACTIVE_JOBS` |

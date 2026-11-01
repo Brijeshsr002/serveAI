@@ -10,7 +10,7 @@ const sora = Sora({ subsets: ["latin"], weight: ["600", "700"], variable: "--fon
 
 export async function generateMetadata(): Promise<Metadata> {
   const name = await getSettings().then((s) => s.center_name, () => SETTING_DEFAULTS.center_name);
-  return { title: `${name} × ${CRM_NAME}`, description: BRAND_TAGLINE };
+  return { title: `${name} | ${CRM_NAME}`, description: BRAND_TAGLINE };
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

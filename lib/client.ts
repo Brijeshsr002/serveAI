@@ -1,4 +1,4 @@
-/** Browser helper for ServeAI's own API. Sendiee and payment secrets stay behind it. */
+/** Browser helper for ServAI's own API. Sendiee and payment secrets stay behind it. */
 export async function api<T = unknown>(path: string, { method = "GET", body }: { method?: string; body?: unknown } = {}): Promise<T> {
   let res: Response;
   try {

@@ -20,7 +20,10 @@ export const POST = open(
     if (!rateLimit(`login-email:${email}`, 10, 15 * 60_000)) {
       throw new ApiError(429, "RATE_LIMITED", "Too many login attempts. Please wait and try again.");
     }
-    const user = await db.user.findUnique({ where: { email } });
+    const user = await db.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, role: true, active: true, passwordHash: true },
+    });
     const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
     if (!user || !valid || !user.active) {
       throw new ApiError(401, "INVALID_CREDENTIALS", "Incorrect email or password");

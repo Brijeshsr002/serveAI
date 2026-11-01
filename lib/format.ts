@@ -41,3 +41,47 @@ export const addDays = (d: Date, days: number) => new Date(d.getTime() + days * 
 /** yyyy-mm-dd of an instant as seen in IST. */
 export const istDayKey = (d: Date) => new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
 export const istMonthKey = (d: Date) => istDayKey(d).slice(0, 7);
+
+/** A Postgres DATE column holds UTC midnight of its calendar day, so no IST shift applies to these. */
+export const dayKeyToDate = (key: string) => new Date(`${key}T00:00:00.000Z`);
+export const dateToDayKey = (d: Date) => d.toISOString().slice(0, 10);
+export const addDayKey = (key: string, days: number) => dateToDayKey(addDays(dayKeyToDate(key), days));
+
+export function isDayKey(v: unknown): v is string {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = dayKeyToDate(v);
+  return !Number.isNaN(d.getTime()) && dateToDayKey(d) === v;
+}
+
+const formatDayKey = (key: string, options: Intl.DateTimeFormatOptions) =>
+  new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...options }).format(dayKeyToDate(key));
+
+/** "SUNDAY, NOVEMBER 1" */
+export const dayHeading = (key: string) => formatDayKey(key, { weekday: "long", month: "long", day: "numeric" }).toUpperCase();
+/** "Sun, Nov 1" */
+export const dayShort = (key: string) => formatDayKey(key, { weekday: "short", month: "short", day: "numeric" });
+/** "November 2026" */
+export const monthLabel = (month: string) => formatDayKey(`${month}-01`, { month: "long", year: "numeric" });
+
+/** Last calendar day of a yyyy-mm month, as yyyy-mm-dd. */
+export function lastDayOfMonth(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  return dateToDayKey(new Date(Date.UTC(y, m, 0)));
+}
+
+/** The instants an IST month covers: start inclusive, end exclusive. */
+export function monthRangeIST(month: string) {
+  const end = addDayKey(lastDayOfMonth(month), 1);
+  return { start: new Date(`${month}-01T00:00:00+05:30`), end: new Date(`${end}T00:00:00+05:30`) };
+}
+
+/** "2 days 3 hrs", "3 hrs 20 min", "45 min" */
+export function duration(ms: number) {
+  const minutes = Math.round(ms / 60_000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const unit = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  if (days > 0) return hours ? `${unit(days, "day")} ${unit(hours, "hr")}` : unit(days, "day");
+  if (hours > 0) return minutes % 60 ? `${unit(hours, "hr")} ${minutes % 60} min` : unit(hours, "hr");
+  return `${minutes} min`;
+}

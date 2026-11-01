@@ -1,10 +1,12 @@
 import { SingleBarChart, WorkerChart } from "@/components/charts";
 import { PageHeader, Section, StatCard } from "@/components/ui-kit";
 import { buttonVariants } from "@/components/ui/button";
+import { requireRole } from "@/lib/auth/page";
 import { money } from "@/lib/format";
 import { chartData, reportSummary } from "@/lib/services/reports";
 
 export default async function ReportsPage() {
+  await requireRole(["ADMIN"]);
   const [s, charts] = await Promise.all([reportSummary(), chartData()]);
   const exportLink = (type: string, label: string) => (
     <a key={type} className={buttonVariants({ variant: "outline", size: "sm" })} href={`/api/reports/export?type=${type}`}>{label}</a>

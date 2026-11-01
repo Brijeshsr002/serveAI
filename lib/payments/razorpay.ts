@@ -40,7 +40,7 @@ export const razorpay: PaymentProvider = {
         contact: `+${input.customer.phone}`,
         ...(input.customer.email ? { email: input.customer.email } : {}),
       },
-      // ServeAI sends its own WhatsApp message, so Razorpay's SMS/email are off.
+      // ServAI sends its own WhatsApp message, so Razorpay's SMS/email are off.
       notify: { sms: false, email: false },
       callback_url: input.callbackUrl,
       callback_method: "get",

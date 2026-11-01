@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Role } from "@prisma/client";
 import {
-  Activity, BarChart3, Car, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
+  Activity, BarChart3, CalendarCheck, Car, CheckCircle2, CreditCard, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, MessageSquareText,
   Search, Settings, ShieldCheck, Tags, User, Users, Wrench, X, type LucideIcon,
 } from "lucide-react";
 import { FormDialog } from "@/components/actions";
@@ -26,6 +26,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Kanban Board", "/admin/jobs", ListChecks],
     ["Workers", "/admin/workers", Wrench],
     ["Receptionists", "/admin/receptionists", ShieldCheck],
+    ["Attendance", "/admin/attendance", CalendarCheck],
     ["Payments", "/admin/payments", CreditCard],
     ["Invoices", "/admin/invoices", FileText],
     ["WhatsApp", "/admin/whatsapp", MessageCircle],
@@ -43,6 +44,7 @@ const NAV: Record<Role, NavItem[]> = {
     ["Service Rates", "/reception/service-rates", Tags],
     ["Payments", "/reception/payments", CreditCard],
     ["WhatsApp", "/reception/whatsapp", MessageCircle],
+    ["Profile", "/reception/profile", User],
   ],
   WORKER: [
     ["My Jobs", "/worker/dashboard", ListChecks],

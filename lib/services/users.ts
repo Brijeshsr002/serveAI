@@ -5,6 +5,7 @@ import { logActivity } from "@/lib/activity";
 import type { Actor } from "@/lib/api/route";
 import { db, isUniqueViolation } from "@/lib/db";
 import { ApiError, badRequest, conflict, notFound } from "@/lib/errors";
+import { recordActiveChange } from "@/lib/services/attendance";
 import { ACTIVE_STATUSES } from "@/lib/status";
 
 export const userSelect = {
@@ -17,18 +18,18 @@ export const userSelect = {
   createdAt: true,
 } as const;
 
-const password = z.string().min(8, "Password must be at least 8 characters").max(200);
+export const passwordField = z.string().min(8, "Password must be at least 8 characters").max(200);
 
-const fields = {
+export const userFieldSchemas = {
   name: z.string().trim().min(1, "Name is required").max(120),
   email: z.string().trim().toLowerCase().email(),
   phone: z.string().trim().max(20).optional().nullable().transform((v) => v || null),
   role: z.enum(Role),
 };
 
-export const userSchema = z.object({ ...fields, password });
-export const userPatchSchema = z.object({ ...fields, password, active: z.boolean() }).partial();
-export const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: password });
+export const userSchema = z.object({ ...userFieldSchemas, password: passwordField });
+export const userPatchSchema = z.object({ ...userFieldSchemas, password: passwordField, active: z.boolean() }).partial();
+export const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: passwordField });
 
 export async function createUser(actor: Actor, input: z.output<typeof userSchema>) {
   const { password: plain, ...data } = input;
@@ -50,7 +51,7 @@ export async function createUser(actor: Actor, input: z.output<typeof userSchema
   }
 }
 
-async function assertNoActiveJobs(id: string) {
+export async function assertNoActiveJobs(id: string) {
   const active = await db.serviceJob.count({ where: { assignedWorkerId: id, status: { in: ACTIVE_STATUSES } } });
   if (active > 0) throw conflict("WORKER_HAS_ACTIVE_JOBS", `Reassign this worker's ${active} active job(s) first`);
 }
@@ -61,11 +62,16 @@ export async function updateUser(actor: Actor, id: string, input: z.output<typeo
     throw badRequest("CANNOT_CHANGE_SELF", "You can't deactivate or demote your own account");
   }
   if (input.active === false) await assertNoActiveJobs(id);
+  const passwordHash = plain ? await bcrypt.hash(plain, 12) : null;
   try {
-    const user = await db.user.update({
-      where: { id },
-      data: { ...data, ...(plain ? { passwordHash: await bcrypt.hash(plain, 12) } : {}) },
-      select: userSelect,
+    const user = await db.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { ...data, ...(passwordHash ? { passwordHash } : {}) },
+        select: userSelect,
+      });
+      if (input.active !== undefined) await recordActiveChange(tx, id, input.active);
+      return updated;
     });
     await logActivity(actor, {
       action: "USER_UPDATED",
@@ -84,10 +90,14 @@ export async function updateUser(actor: Actor, id: string, input: z.output<typeo
 /** "Delete" deactivates: audit logs and job history must keep pointing at a real person. */
 export async function deactivateUser(actor: Actor, id: string) {
   if (id === actor.id) throw badRequest("CANNOT_CHANGE_SELF", "You can't delete your own account");
-  const existing = await db.user.findUnique({ where: { id } });
+  const existing = await db.user.findUnique({ where: { id }, select: { id: true } });
   if (!existing) throw notFound("USER_NOT_FOUND", "User not found");
   await assertNoActiveJobs(id);
-  const user = await db.user.update({ where: { id }, data: { active: false }, select: userSelect });
+  const user = await db.$transaction(async (tx) => {
+    const updated = await tx.user.update({ where: { id }, data: { active: false }, select: userSelect });
+    await recordActiveChange(tx, id, false);
+    return updated;
+  });
   await logActivity(actor, {
     action: "USER_DEACTIVATED",
     entityType: "User",
@@ -98,10 +108,10 @@ export async function deactivateUser(actor: Actor, id: string) {
 }
 
 export async function changeOwnPassword(userId: string, actor: Actor, input: z.output<typeof passwordSchema>) {
-  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { passwordHash: true } });
   if (!(await bcrypt.compare(input.currentPassword, user.passwordHash))) {
     throw new ApiError(400, "WRONG_PASSWORD", "Your current password is incorrect");
   }
-  await db.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(input.newPassword, 12) } });
+  await db.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(input.newPassword, 12) }, select: { id: true } });
   await logActivity(actor, { action: "PASSWORD_CHANGED", entityType: "User", entityId: userId, summary: `${actor.name} changed their password` });
 }

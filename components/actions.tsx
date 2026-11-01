@@ -16,7 +16,7 @@ export const SELECT_CLASS =
 export type FormField = {
   name: string;
   label: string;
-  type?: "text" | "email" | "tel" | "number" | "textarea" | "select" | "datetime-local" | "password" | "checkbox";
+  type?: "text" | "email" | "tel" | "number" | "textarea" | "select" | "date" | "datetime-local" | "password" | "checkbox";
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -35,7 +35,7 @@ function toLocalInput(value: unknown) {
 }
 
 export function FormDialog({
-  trigger, triggerLabel, triggerSize = "sm", title, endpoint, method = "POST", fields, initial = {}, submitLabel = "Save", success = "Saved", variant = "default", redirectTo,
+  trigger, triggerLabel, triggerSize = "sm", title, endpoint, method = "POST", fields, initial = {}, extraBody, submitLabel = "Save", success = "Saved", variant = "default", redirectTo,
 }: {
   trigger: React.ReactNode;
   /** Accessible name, for a trigger that is only an icon. */
@@ -46,6 +46,8 @@ export function FormDialog({
   method?: "POST" | "PATCH";
   fields: FormField[];
   initial?: Record<string, unknown>;
+  /** Sent with the form values, for ids the person doesn't type. */
+  extraBody?: Record<string, unknown>;
   submitLabel?: string;
   success?: string;
   variant?: Variant;
@@ -60,7 +62,7 @@ export function FormDialog({
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const body: Record<string, unknown> = {};
+    const body: Record<string, unknown> = { ...extraBody };
     for (const f of fields) {
       if (f.type === "checkbox") {
         body[f.name] = form.get(f.name) === "on";

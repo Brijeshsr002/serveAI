@@ -28,7 +28,7 @@ export function Logo({ name, className, light = false, logoClassName }: { name: 
   return (
     <span className={cn("flex min-w-0 flex-col gap-1", className)}>
       <ServAiLogo light={light} className={cn("h-8 w-auto self-start", logoClassName)} />
-      <span className="truncate text-[0.72em] font-medium opacity-80"><span aria-label="in collaboration with">×</span> {name}</span>
+      <span className="truncate text-[0.72em] font-medium opacity-80">{name}</span>
     </span>
   );
 }
